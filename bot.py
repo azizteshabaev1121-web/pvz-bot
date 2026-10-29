@@ -1,5 +1,4 @@
 import os
-import re
 from threading import Thread
 from flask import Flask
 import telebot
@@ -12,6 +11,7 @@ bot = telebot.TeleBot(TOKEN)
 
 user_lang = {}
 user_pvz = {}
+admin_message_mapping = {}
 
 # Ваши 4 точки ПВЗ с адресами
 PVZ_NAMES = {
@@ -133,24 +133,14 @@ def set_pvz(message):
     bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
 
 
-# Ультра-умный перехват ответа администратора (поддерживает ответ на любое из сообщений)
 @bot.message_handler(
     func=lambda message: str(message.chat.id) == ADMIN_CHAT_ID
     and message.reply_to_message
 )
 def admin_reply(message):
     try:
-        client_id = None
-        replied = message.reply_to_message
-
-        # 1. Проверяем текст сообщения (если ответили на уведомление с ID)
-        replied_text = replied.text or replied.caption or ''
-        match = re.search(r'ID:\s*(\d+)', replied_text)
-        if match:
-            client_id = int(match.group(1))
-        # 2. Если ответили прямо на пересланное сообщение клиента
-        elif replied.forward_from:
-            client_id = replied.forward_from.id
+        replied_id = message.reply_to_message.message_id
+        client_id = admin_message_mapping.get(replied_id)
 
         if client_id:
             bot.send_message(
@@ -162,8 +152,7 @@ def admin_reply(message):
         else:
             bot.reply_to(
                 message,
-                '❌ Не удалось найти ID клиента. Отвечайте на сообщение с'
-                ' текстом "Новая жалоба!"',
+                '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение новой жалобы.',
             )
     except Exception as e:
         bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
@@ -190,8 +179,12 @@ def handle_complaint(message):
     admin_text = (
         f'📩 **Новая жалоба!**\nПВЗ: {pvz}\nОт: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
     )
-    bot.send_message(ADMIN_CHAT_ID, admin_text, parse_mode='Markdown')
-    bot.forward_message(ADMIN_CHAT_ID, chat_id, message.message_id)
+
+    msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text, parse_mode='Markdown')
+    msg2 = bot.forward_message(ADMIN_CHAT_ID, chat_id, message.message_id)
+
+    admin_message_mapping[msg1.message_id] = chat_id
+    admin_message_mapping[msg2.message_id] = chat_id
 
 
 if __name__ == '__main__':
