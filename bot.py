@@ -1,4 +1,5 @@
 import os
+import re
 from threading import Thread
 from flask import Flask
 import telebot
@@ -59,7 +60,6 @@ def keep_alive():
   t.start()
 
 
-# Умный перехват любых параметров из QR-кодов (старых и новых)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
   chat_id = message.chat.id
@@ -69,7 +69,6 @@ def send_welcome(message):
   args = message.text.split()
   if len(args) > 1:
     param = args[1].lower()
-    # Ловим любые варианты, зашитые в ваши QR-коды
     if '1' in param or 'dukent' in param or 'pvz1' in param:
       user_pvz[chat_id] = PVZ_NAMES['pvz1']
     elif '2' in param or 'urikzor' in param or 'pvz2' in param:
@@ -106,12 +105,11 @@ def set_language(call):
   if chat_id in user_pvz:
     pvz = user_pvz[chat_id]
     text = TEXTS[lang]['welcome_complaint'].format(pvz=pvz)
-    bot.edit_message_text(
-        text=text,
-        chat_id=chat_id,
-        message_id=call.message.message_id,
-        reply_markup=None,
-    )
+    try:
+      bot.delete_message(chat_id, call.message.message_id)
+    except Exception:
+      pass
+    bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
   else:
     markup = types.ReplyKeyboardMarkup(
         resize_keyboard=True, one_time_keyboard=True
@@ -133,6 +131,31 @@ def set_pvz(message):
 
   text = TEXTS[lang]['welcome_complaint'].format(pvz=message.text)
   bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+
+
+# Умный перехват ответа администратора для отправки клиенту
+@bot.message_handler(
+    func=lambda message: str(message.chat.id) == ADMIN_CHAT_ID
+    and message.reply_to_message
+)
+def admin_reply(message):
+  try:
+    replied_text = message.reply_to_message.text or ''
+    match = re.search(r'ID:\s*(\d+)', replied_text)
+    if match:
+      client_id = int(match.group(1))
+      bot.send_message(
+          client_id,
+          f'💬 **Ответ от руководства:**\n\n{message.text}',
+          parse_mode='Markdown',
+      )
+      bot.reply_to(message, '✅ Ответ успешно отправлен клиенту!')
+    else:
+      bot.reply_to(
+          message, '❌ Не удалось найти ID клиента в этом сообщении.'
+      )
+  except Exception as e:
+    bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
 
 
 @bot.message_handler(
