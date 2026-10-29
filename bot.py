@@ -133,16 +133,26 @@ def set_pvz(message):
     bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
 
 
+# Ультра-умный перехват ответа администратора (поддерживает ответ на любое из сообщений)
 @bot.message_handler(
     func=lambda message: str(message.chat.id) == ADMIN_CHAT_ID
     and message.reply_to_message
 )
 def admin_reply(message):
     try:
-        replied_text = message.reply_to_message.text or ''
+        client_id = None
+        replied = message.reply_to_message
+
+        # 1. Проверяем текст сообщения (если ответили на уведомление с ID)
+        replied_text = replied.text or replied.caption or ''
         match = re.search(r'ID:\s*(\d+)', replied_text)
         if match:
             client_id = int(match.group(1))
+        # 2. Если ответили прямо на пересланное сообщение клиента
+        elif replied.forward_from:
+            client_id = replied.forward_from.id
+
+        if client_id:
             bot.send_message(
                 client_id,
                 f'💬 **Ответ от руководства:**\n\n{message.text}',
@@ -151,7 +161,9 @@ def admin_reply(message):
             bot.reply_to(message, '✅ Ответ успешно отправлен клиенту!')
         else:
             bot.reply_to(
-                message, '❌ Не удалось найти ID клиента в этом сообщении.'
+                message,
+                '❌ Не удалось найти ID клиента. Отвечайте на сообщение с'
+                ' текстом "Новая жалоба!"',
             )
     except Exception as e:
         bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
