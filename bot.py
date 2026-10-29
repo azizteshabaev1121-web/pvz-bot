@@ -27,19 +27,19 @@ PVZ_NAMES = {
 TEXTS = {
     'ru': {
         'choose_action': 'Пожалуйста, выберите цель вашего обращения:',
-        'btn_complaint': '⚠️ Пожаловаться на персонал',
+        'btn_complaint': '📩 Обращение к руководству ПВЗ',
         'btn_praise': '⭐️ Поблагодарить сотрудника',
-        'choose_category': 'Выберите категорию проблемы:',
-        'cat_1': '🗣 Грубость / Хамство',
+        'choose_category': 'Выберите категорию вопроса:',
+        'cat_1': '🗣 Грубость / Хамство персонала',
         'cat_2': '⏳ Очередь / Медленное обслуживание',
         'cat_3': '📦 Ошибка при выдаче заказа',
-        'cat_4': '🧹 Чистота / Порядок',
-        'cat_5': '📝 Другая проблема',
+        'cat_4': '🧹 Чистота / Порядок в помещении',
+        'cat_5': '📝 Другой вопрос или предложение',
         'welcome_complaint': (
             'Категория: {cat}\n'
             'Точка: {pvz}\n\n'
-            'Опишите подробности вашей жалобы.\n'
-            '📌 Обязательно укажите дату и точное время инцидента, чтобы руководство могло проверить камеры видеонаблюдения.\n\n'
+            'Опишите детали вашего обращения.\n'
+            '📌 Если это связано с инцидентом, укажите дату и примерное время, чтобы руководство могло проверить камеры.\n\n'
             '(Вы можете отправить текст, фото или видео).'
         ),
         'welcome_praise': (
@@ -48,24 +48,24 @@ TEXTS = {
             '⭐️ Нам очень приятно слышать хорошие отзывы!\n\n'
             '(Вы можете отправить текст, фото или видео).'
         ),
-        'success_complaint': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
-        'success_praise': '✅ Ваша благодарность успешно отправлена руководству! Большое спасибо за теплые слова!',
+        'success_complaint': '✅ Ваше обращение успешно направлено руководству ПВЗ. Спасибо за помощь в улучшении сервиса!',
+        'success_praise': '✅ Ваша благодарность успешно передана руководству! Большое спасибо за теплые слова!',
     },
     'uz': {
-        'choose_action': 'Murojaatingiz turini tanlang:',
-        'btn_complaint': '⚠️ Xodimdan shikoyat qilish',
+        'choose_action': 'Murojaatingiz maqsadini tanlang:',
+        'btn_complaint': '📩 PВЗ rahbariyatiga murojaat',
         'btn_praise': '⭐️ Xodimga minnatdorchilik bildirish',
-        'choose_category': 'Muammo turini tanlang:',
-        'cat_1': "🗣 Qo'pol muomala / Baqirish",
+        'choose_category': 'Mavzu turini tanlang:',
+        'cat_1': "🗣 Xodimning qo'pol muomalasi",
         'cat_2': '⏳ Sekin xizmat / Navbat',
         'cat_3': '📦 Buyurtmadagi xatolik',
-        'cat_4': '🧹 Tozalik / Tartib',
-        'cat_5': '📝 Boshqa muammo',
+        'cat_4': '🧹 Xona tozaligi / Tartib',
+        'cat_5': '📝 Boshqa taklif yoki savol',
         'welcome_complaint': (
             'Kategoriya: {cat}\n'
             'Punkt: {pvz}\n\n'
-            'Shikoyatingiz tafsilotlarini yozib qoldiring.\n'
-            '📌 Videokuzatuv kameralarini tekshirish uchun sana va aniq vaqtni ko‘rsatishingiz shart.\n\n'
+            'Murojaatingiz tafsilotlarini yozib qoldiring.\n'
+            '📌 Videokuzatuv kameralarini tekshirish uchun sana va taxminiy vaqtni ko‘rsatishingiz mumkin.\n\n'
             '(Matn, rasm yoki video yuborishingiz mumkin).'
         ),
         'welcome_praise': (
@@ -74,8 +74,8 @@ TEXTS = {
             '⭐️ Ishimiz haqida ijobiy fikrlarni eshitishdan mamnunmiz!\n\n'
             '(Matn, rasm yoki video yuborishingiz mumkin).'
         ),
-        'success_complaint': '✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
-        'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yuborildi! Iliq so\'zlaringiz uchun katta rahmat!',
+        'success_complaint': '✅ Murojaatingiz PВЗ rahbariyatiga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
+        'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yetkazildi! Iliq so\'zlaringiz uchun katta rahmat!',
     },
 }
 
@@ -176,7 +176,7 @@ def set_action(call):
 
         if action == 'complaint':
             markup = types.InlineKeyboardMarkup(row_width=1)
-            for i in range(1, 6):  # Теперь генерирует 5 категорий (включая чистоту)
+            for i in range(1, 6):
                 cat_key = f'cat_{i}'
                 markup.add(types.InlineKeyboardButton(TEXTS[lang][cat_key], callback_data=f'category_{i}'))
             bot.send_message(chat_id, TEXTS[lang]['choose_category'], reply_markup=markup)
@@ -220,7 +220,7 @@ def admin_reply(message):
             bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
             bot.reply_to(message, '✅ Ответ успешно отправлен клиенту!')
         else:
-            bot.reply_to(message, '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение новой жалобы.')
+            bot.reply_to(message, '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение нового обращения.')
     except Exception as e:
         bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
 
@@ -241,8 +241,8 @@ def handle_complaint(message):
 
         if action == 'complaint':
             bot.reply_to(message, TEXTS[lang]['success_complaint'])
-            title = f'📩 Новая жалоба ({category})!'
-            action_name = 'Жалоба'
+            title = f'📩 Обращение к руководству ПВЗ ({category})!'
+            action_name = 'Обращение ПВЗ'
         else:
             bot.reply_to(message, TEXTS[lang]['success_praise'])
             title = '⭐️ Новая благодарность сотруднику!'
