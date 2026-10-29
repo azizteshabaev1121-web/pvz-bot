@@ -8,7 +8,7 @@ import requests
 
 TOKEN = '9006379873:AAFAqMpfyhsk3pPXT53OFs7tHwOue9FsH4o'
 ADMIN_CHAT_ID = '8208422375'
-GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwh1QwChd9BMCX1xVcbnY81-DwEx5oYFYYQArvhCBS_mcqeXpjjIH31GQZpHeYNaTn-Zw/exec'
+GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyT1JWVJQWDR7HrNHCD-149scxrCD6sQmvaLXNdhDaGVqfyqPq6_GT7MOhraV-z8Gm2QQ/exec'
 
 bot = telebot.TeleBot(TOKEN)
 
