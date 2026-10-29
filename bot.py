@@ -11,6 +11,8 @@ bot = telebot.TeleBot(TOKEN)
 
 user_lang = {}
 user_pvz = {}
+user_action = {}
+user_category = {}
 admin_message_mapping = {}
 
 # Ваши точки ПВЗ с обновленными адресами
@@ -23,24 +25,56 @@ PVZ_NAMES = {
 
 TEXTS = {
     'ru': {
+        'choose_action': 'Пожалуйста, выберите цель вашего обращения:',
+        'btn_complaint': '⚠️ Пожаловаться на персонал',
+        'btn_praise': '⭐️ Поблагодарить сотрудника',
+        'choose_category': 'Выберите категорию проблемы:',
+        'cat_1': '🗣 Грубость / Хамство',
+        'cat_2': '⏳ Очередь / Медленное обслуживание',
+        'cat_3': '📦 Ошибка при выдаче заказа',
+        'cat_4': '📝 Другая проблема',
         'welcome_complaint': (
-            'Здравствуйте! Вы обращаетесь по точке: {pvz}.\n\n'
-            'Опишите вашу проблему или жалобу на персонал.\n'
+            'Категория: {cat}\n'
+            'Точка: {pvz}\n\n'
+            'Опишите подробности вашей жалобы.\n'
             '📌 Обязательно укажите дату и точное время инцидента, чтобы руководство могло проверить камеры видеонаблюдения.\n\n'
             '(Вы можете отправить текст, фото или видео).'
         ),
-        'success': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
+        'welcome_praise': (
+            'Вы выбрали: Поблагодарить сотрудника (точка: {pvz}).\n\n'
+            'Напишите ваши слова благодарности или отзыв о работе сотрудника.\n'
+            '⭐️ Нам очень приятно слышать хорошие отзывы!\n\n'
+            '(Вы можете отправить текст, фото или видео).'
+        ),
+        'success_complaint': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
+        'success_praise': '✅ Ваша благодарность успешно отправлена руководству! Большое спасибо за теплые слова!',
         'no_qr': 'Пожалуйста, отсканируйте QR-код на точке ПВЗ, чтобы обратиться к руководству.',
     },
     'uz': {
+        'choose_action': 'Murojaatingiz turini tanlang:',
+        'btn_complaint': '⚠️ Xodimdan shikoyat qilish',
+        'btn_praise': '⭐️ Xodimga minnatdorchilik bildirish',
+        'choose_category': 'Muammo turini tanlang:',
+        'cat_1': "🗣 Qo'pol muomala / Baqirish",
+        'cat_2': '⏳ Sekin xizmat / Navbat',
+        'cat_3': '📦 Buyurtmadagi xatolik',
+        'cat_4': '📝 Boshqa muammo',
         'welcome_complaint': (
-            "Assalomu alaykum! Siz murojaat qilayotgan punkt: {pvz}.\n\n"
-            "Xodimlar bo'yicha muammo yoki shikoyatingizni yozib qoldiring.\n"
-            "📌 Videokuzatuv kameralarini tekshirish uchun sana va aniq vaqtni ko‘rsatishingiz shart.\n\n"
-            "(Matn, rasm yoki video yuborishingiz mumkin)."
+            'Kategoriya: {cat}\n'
+            'Punkt: {pvz}\n\n'
+            'Shikoyatingiz tafsilotlarini yozib qoldiring.\n'
+            '📌 Videokuzatuv kameralarini tekshirish uchun sana va aniq vaqtni ko‘rsatishingiz shart.\n\n'
+            '(Matn, rasm yoki video yuborishingiz mumkin).'
         ),
-        'success': "✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!",
-        'no_qr': "Iltimos, murojaat qilish uchun punktimizdagi QR-kodni skanerlang.",
+        'welcome_praise': (
+            'Siz tanladingiz: Xodimga minnatdorchilik bildirish (punkt: {pvz}).\n\n'
+            'Xodimimizga minnatdorchilik so\'zlaringizni yozib qoldiring.\n'
+            '⭐️ Ishimiz haqida ijobiy fikrlarni eshitishdan mamnunmiz!\n\n'
+            '(Matn, rasm yoki video yuborishingiz mumkin).'
+        ),
+        'success_complaint': '✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
+        'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yuborildi! Iliq so\'zlaringiz uchun katta rahmat!',
+        'no_qr': 'Iltimos, murojaat qilish uchun punktimizdagi QR-kodni skanerlang.',
     },
 }
 
@@ -68,6 +102,8 @@ def send_welcome(message):
         chat_id = message.chat.id
         user_lang.pop(chat_id, None)
         user_pvz.pop(chat_id, None)
+        user_action.pop(chat_id, None)
+        user_category.pop(chat_id, None)
 
         args = message.text.split()
         if len(args) > 1:
@@ -89,7 +125,7 @@ def send_welcome(message):
 
         markup = types.InlineKeyboardMarkup(row_width=2)
         btn_ru = types.InlineKeyboardButton('🇷🇺 Русский', callback_data='lang_ru')
-        btn_uz = types.InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data='lang_uz')
+        btn_uz = types.InlineKeyboardButton('🇺🇿 O\'zbekcha', callback_data='lang_uz')
         markup.add(btn_ru, btn_uz)
 
         bot.send_message(
@@ -114,11 +150,8 @@ def set_language(call):
             pass
 
         if chat_id in user_pvz:
-            pvz = user_pvz[chat_id]
-            text = TEXTS[lang]['welcome_complaint'].format(pvz=pvz)
-            bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+            show_action_menu(chat_id, lang)
         else:
-            # Для удобства теста: если зашли без QR, дадим выбрать точку один раз
             markup = types.ReplyKeyboardMarkup(
                 resize_keyboard=True, one_time_keyboard=True
             )
@@ -133,17 +166,92 @@ def set_language(call):
         print(f'Error in set_language: {e}')
 
 
+def show_action_menu(chat_id, lang):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    btn1 = types.InlineKeyboardButton(
+        TEXTS[lang]['btn_complaint'], callback_data='action_complaint'
+    )
+    btn2 = types.InlineKeyboardButton(
+        TEXTS[lang]['btn_praise'], callback_data='action_praise'
+    )
+    markup.add(btn1, btn2)
+    bot.send_message(
+        chat_id, TEXTS[lang]['choose_action'], reply_markup=markup
+    )
+
+
 @bot.message_handler(func=lambda message: message.text in PVZ_NAMES.values())
 def set_pvz(message):
     try:
         chat_id = message.chat.id
         lang = user_lang.get(chat_id, 'ru')
         user_pvz[chat_id] = message.text
-
-        text = TEXTS[lang]['welcome_complaint'].format(pvz=message.text)
-        bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+        show_action_menu(chat_id, lang)
     except Exception as e:
         print(f'Error in set_pvz: {e}')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('action_'))
+def set_action(call):
+    try:
+        chat_id = call.message.chat.id
+        action = call.data.split('_')[1]  # 'complaint' или 'praise'
+        user_action[chat_id] = action
+
+        lang = user_lang.get(chat_id, 'ru')
+        pvz = user_pvz.get(chat_id, 'ПВЗ')
+
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except Exception:
+            pass
+
+        if action == 'complaint':
+            # Если это жалоба — показываем кнопки с категориями проблем
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            for i in range(1, 5):
+                cat_key = f'cat_{i}'
+                markup.add(
+                    types.InlineKeyboardButton(
+                        TEXTS[lang][cat_key], callback_data=f'category_{i}'
+                    )
+                )
+            bot.send_message(
+                chat_id, TEXTS[lang]['choose_category'], reply_markup=markup
+            )
+        else:
+            # Если благодарность — сразу просим текст
+            user_category[chat_id] = 'Благодарность'
+            text = TEXTS[lang]['welcome_praise'].format(pvz=pvz)
+            bot.send_message(
+                chat_id, text, reply_markup=types.ReplyKeyboardRemove()
+            )
+    except Exception as e:
+        print(f'Error in set_action: {e}')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('category_'))
+def set_category(call):
+    try:
+        chat_id = call.message.chat.id
+        cat_index = call.data.split('_')[1]
+        lang = user_lang.get(chat_id, 'ru')
+        pvz = user_pvz.get(chat_id, 'ПВЗ')
+
+        cat_text = TEXTS[lang][f'cat_{cat_index}']
+        user_category[chat_id] = cat_text
+
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except Exception:
+            pass
+
+        text = TEXTS[lang]['welcome_complaint'].format(
+            cat=cat_text, pvz=pvz
+        )
+        bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+    except Exception as e:
+        print(f'Error in set_category: {e}')
 
 
 @bot.message_handler(
@@ -176,7 +284,12 @@ def handle_complaint(message):
     try:
         chat_id = message.chat.id
 
-        if chat_id not in user_lang or chat_id not in user_pvz:
+        if (
+            chat_id not in user_lang
+            or chat_id not in user_pvz
+            or chat_id not in user_action
+            or chat_id not in user_category
+        ):
             bot.send_message(
                 chat_id,
                 'Пожалуйста, нажмите /start для начала работы с ботом.',
@@ -185,11 +298,18 @@ def handle_complaint(message):
 
         lang = user_lang.get(chat_id, 'ru')
         pvz = user_pvz.get(chat_id, 'ПВЗ (Точка)')
+        action = user_action.get(chat_id, 'complaint')
+        category = user_category.get(chat_id, 'Не указана')
 
-        bot.reply_to(message, TEXTS[lang]['success'])
+        if action == 'complaint':
+            bot.reply_to(message, TEXTS[lang]['success_complaint'])
+            title = f'📩 Новая жалоба ({category})!'
+        else:
+            bot.reply_to(message, TEXTS[lang]['success_praise'])
+            title = '⭐️ Новая благодарность сотруднику!'
 
         admin_text = (
-            f'📩 Новое обращение / жалоба!\n'
+            f'{title}\n'
             f'📍 ПВЗ: {pvz}\n'
             f'👤 От: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
         )
