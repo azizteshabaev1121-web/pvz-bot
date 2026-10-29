@@ -1,4 +1,5 @@
 import os
+import time
 from threading import Thread
 from flask import Flask
 import telebot
@@ -281,8 +282,13 @@ def handle_complaint(message):
 if __name__ == '__main__':
     keep_alive()
     print('Бот запущен в облаке...')
+    
+    # Даем время старому процессу отключиться, чтобы избежать ошибки 409
+    time.sleep(5)
+    
     try:
         bot.remove_webhook()
     except Exception:
         pass
-    bot.infinity_polling(skip_pending=True)
+        
+    bot.infinity_polling(skip_pending=True, interval=2, timeout=20)
