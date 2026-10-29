@@ -16,29 +16,30 @@ admin_message_mapping = {}
 # Ваши 4 точки ПВЗ с адресами
 PVZ_NAMES = {
     'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
-    'pvz2': '📍 ПВЗ №2 УРИКЗОР МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
-    'pvz3': '📍 ПВЗ №3 УНИВЕРСИТЕТ (ул. Узбекистон Мустакиллиги, 80)',
-    'pvz4': '📍 ПВЗ №4 30-ЛЕТ ЗАМИН-1 (ул. Бунёдкор, дом-210)',
+    'pvz2': '📍 ПВЗ №2 УРИКЗОР_МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
+    'pvz3': '📍 ПВЗ №3 УНИВЕРСИТЕТ (ул. Узбекистон Мустакиллиги, дом-80)',
+    'pvz4': '📍 ПВЗ №4 30-ЛЕТ_ЗАМИН-1 (ул. Бунёдкор, дом-210)',
 }
 
+# Отточенные финальные тексты с акцентом на камеры видеонаблюдения
 TEXTS = {
     'ru': {
         'welcome_complaint': (
-            'Здравствуйте! Вы обращаетесь по точке: {pvz}.\n\nОпишите вашу проблему'
-            ' или жалобу (можно отправить текст, фото или видео). Руководство'
-            ' обязательно изучит ваш отзыв.'
+            'Здравствуйте! Вы обращаетесь по точке: **{pvz}**.\n\n'
+            'Опишите вашу проблему или жалобу на персонал.\n'
+            '📌 **Обязательно укажите дату и точное время** инцидента, чтобы руководство могло проверить камеры видеонаблюдения.\n\n'
+            '(Вы можете отправить текст, фото или видео).'
         ),
-        'success': 'Ваша жалоба успешно отправлена руководству. Спасибо!',
+        'success': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
     },
     'uz': {
         'welcome_complaint': (
-            "Assalomu alaykum! Siz murojaat qilayotgan punkt: {pvz}.\n\nMuammo"
-            " yoki shikoyatingizni yozib qoldiring (matn, rasm yoki video"
-            ' yuborishingiz mumkin). Rahbariyat albatta ko‘rib chiqadi.'
+            "Assalomu alaykum! Siz murojaat qilayotgan punkt: **{pvz}**.\n\n"
+            "Xodimlar bo'yicha muammo yoki shikoyatingizni yozib qoldiring.\n"
+            "📌 Videokuzatuv kameralarini tekshirish uchun **sana va aniq vaqtni ko‘rsatishingiz shart**.\n\n"
+            "(Matn, rasm yoki video yuborishingiz mumkin)."
         ),
-        'success': (
-            " Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Rahmat!"
-        ),
+        'success': "✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!",
     },
 }
 
@@ -109,7 +110,12 @@ def set_language(call):
             bot.delete_message(chat_id, call.message.message_id)
         except Exception:
             pass
-        bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(
+            chat_id,
+            text,
+            parse_mode='Markdown',
+            reply_markup=types.ReplyKeyboardRemove(),
+        )
     else:
         markup = types.ReplyKeyboardMarkup(
             resize_keyboard=True, one_time_keyboard=True
@@ -130,7 +136,12 @@ def set_pvz(message):
     user_pvz[chat_id] = message.text
 
     text = TEXTS[lang]['welcome_complaint'].format(pvz=message.text)
-    bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+    bot.send_message(
+        chat_id,
+        text,
+        parse_mode='Markdown',
+        reply_markup=types.ReplyKeyboardRemove(),
+    )
 
 
 @bot.message_handler(
@@ -177,7 +188,9 @@ def handle_complaint(message):
     bot.reply_to(message, TEXTS[lang]['success'])
 
     admin_text = (
-        f'📩 **Новая жалоба!**\nПВЗ: {pvz}\nОт: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
+        f'📩 **Новое обращение / жалоба!**\n'
+        f'📍 ПВЗ: {pvz}\n'
+        f'👤 От: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
     )
 
     msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text, parse_mode='Markdown')
