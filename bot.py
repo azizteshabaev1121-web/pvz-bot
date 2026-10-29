@@ -17,7 +17,6 @@ user_action = {}
 user_category = {}
 admin_message_mapping = {}
 
-# Ваши точки ПВЗ с обновленными адресами
 PVZ_NAMES = {
     'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
     'pvz2': '📍 ПВЗ №2 УРИКЗОР_МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
@@ -105,7 +104,6 @@ def send_welcome(message):
         user_action.pop(chat_id, None)
         user_category.pop(chat_id, None)
 
-        # По умолчанию ставим точку 1 для тестов без QR
         user_pvz[chat_id] = PVZ_NAMES['pvz1']
 
         args = message.text.split()
@@ -115,13 +113,7 @@ def send_welcome(message):
                 user_pvz[chat_id] = PVZ_NAMES['pvz2']
             elif '3' in param or 'universitet' in param or 'pvz3' in param:
                 user_pvz[chat_id] = PVZ_NAMES['pvz3']
-            elif (
-                '4' in param
-                or 'zamin' in param
-                or 'bunyodkor' in param
-                or 'angren' in param
-                or 'pvz4' in param
-            ):
+            elif '4' in param or 'zamin' in param or 'bunyodkor' in param or 'angren' in param or 'pvz4' in param:
                 user_pvz[chat_id] = PVZ_NAMES['pvz4']
             elif '1' in param or 'dukent' in param or 'pvz1' in param:
                 user_pvz[chat_id] = PVZ_NAMES['pvz1']
@@ -159,16 +151,10 @@ def set_language(call):
 
 def show_action_menu(chat_id, lang):
     markup = types.InlineKeyboardMarkup(row_width=1)
-    btn1 = types.InlineKeyboardButton(
-        TEXTS[lang]['btn_complaint'], callback_data='action_complaint'
-    )
-    btn2 = types.InlineKeyboardButton(
-        TEXTS[lang]['btn_praise'], callback_data='action_praise'
-    )
+    btn1 = types.InlineKeyboardButton(TEXTS[lang]['btn_complaint'], callback_data='action_complaint')
+    btn2 = types.InlineKeyboardButton(TEXTS[lang]['btn_praise'], callback_data='action_praise')
     markup.add(btn1, btn2)
-    bot.send_message(
-        chat_id, TEXTS[lang]['choose_action'], reply_markup=markup
-    )
+    bot.send_message(chat_id, TEXTS[lang]['choose_action'], reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('action_'))
@@ -190,20 +176,12 @@ def set_action(call):
             markup = types.InlineKeyboardMarkup(row_width=1)
             for i in range(1, 5):
                 cat_key = f'cat_{i}'
-                markup.add(
-                    types.InlineKeyboardButton(
-                        TEXTS[lang][cat_key], callback_data=f'category_{i}'
-                    )
-                )
-            bot.send_message(
-                chat_id, TEXTS[lang]['choose_category'], reply_markup=markup
-            )
+                markup.add(types.InlineKeyboardButton(TEXTS[lang][cat_key], callback_data=f'category_{i}'))
+            bot.send_message(chat_id, TEXTS[lang]['choose_category'], reply_markup=markup)
         else:
             user_category[chat_id] = 'Благодарность'
             text = TEXTS[lang]['welcome_praise'].format(pvz=pvz)
-            bot.send_message(
-                chat_id, text, reply_markup=types.ReplyKeyboardRemove()
-            )
+            bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
     except Exception as e:
         print(f'Error in set_action: {e}')
 
@@ -224,54 +202,34 @@ def set_category(call):
         except Exception:
             pass
 
-        text = TEXTS[lang]['welcome_complaint'].format(
-            cat=cat_text, pvz=pvz
-        )
+        text = TEXTS[lang]['welcome_complaint'].format(cat=cat_text, pvz=pvz)
         bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
     except Exception as e:
         print(f'Error in set_category: {e}')
 
 
-@bot.message_handler(
-    func=lambda message: str(message.chat.id) == ADMIN_CHAT_ID
-    and message.reply_to_message
-)
+@bot.message_handler(func=lambda message: str(message.chat.id) == ADMIN_CHAT_ID and message.reply_to_message)
 def admin_reply(message):
     try:
         replied_id = message.reply_to_message.message_id
         client_id = admin_message_mapping.get(replied_id)
 
         if client_id:
-            bot.send_message(
-                client_id, f'💬 Ответ от руководства:\n\n{message.text}'
-            )
+            bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
             bot.reply_to(message, '✅ Ответ успешно отправлен клиенту!')
         else:
-            bot.reply_to(
-                message,
-                '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение новой жалобы.',
-            )
+            bot.reply_to(message, '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение новой жалобы.')
     except Exception as e:
         bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
 
 
-@bot.message_handler(
-    content_types=['text', 'photo', 'video', 'document', 'audio']
-)
+@bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'audio'])
 def handle_complaint(message):
     try:
         chat_id = message.chat.id
 
-        if (
-            chat_id not in user_lang
-            or chat_id not in user_pvz
-            or chat_id not in user_action
-            or chat_id not in user_category
-        ):
-            bot.send_message(
-                chat_id,
-                'Пожалуйста, нажмите /start для начала работы с ботом.',
-            )
+        if chat_id not in user_lang or chat_id not in user_pvz or chat_id not in user_action or chat_id not in user_category:
+            bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
             return
 
         lang = user_lang.get(chat_id, 'ru')
@@ -291,7 +249,6 @@ def handle_complaint(message):
         client_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {chat_id}"
         text_content = message.text or message.caption or '[Медиафайл]'
 
-        # 📊 Автоматическая отправка данных в Google Таблицу
         try:
             payload = {
                 'pvz': pvz,
@@ -323,7 +280,7 @@ if __name__ == '__main__':
     keep_alive()
     print('Бот запущен в облаке...')
     try:
-        bot.remove_webhook()  # Сбрасываем зависшие вебхуки
+        bot.remove_webhook()
     except Exception:
         pass
     bot.infinity_polling(skip_pending=True)
