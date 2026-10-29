@@ -21,7 +21,6 @@ PVZ_NAMES = {
     'pvz4': '📍 ПВЗ №4 30-ЛЕТ_ЗАМИН-1 (ул. Бунёдкор, дом-210)',
 }
 
-# Отточенные финальные тексты с акцентом на камеры видеонаблюдения
 TEXTS = {
     'ru': {
         'welcome_complaint': (
@@ -31,6 +30,7 @@ TEXTS = {
             '(Вы можете отправить текст, фото или видео).'
         ),
         'success': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
+        'no_qr': 'Пожалуйста, отсканируйте QR-код на точке ПВЗ, чтобы обратиться к руководству.',
     },
     'uz': {
         'welcome_complaint': (
@@ -40,6 +40,7 @@ TEXTS = {
             "(Matn, rasm yoki video yuborishingiz mumkin)."
         ),
         'success': "✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!",
+        'no_qr': "Iltimos, murojaat qilish uchun punktimizdagi QR-kodni skanerlang.",
     },
 }
 
@@ -103,13 +104,14 @@ def set_language(call):
     lang = call.data.split('_')[1]
     user_lang[chat_id] = lang
 
+    try:
+        bot.delete_message(chat_id, call.message.message_id)
+    except Exception:
+        pass
+
     if chat_id in user_pvz:
         pvz = user_pvz[chat_id]
         text = TEXTS[lang]['welcome_complaint'].format(pvz=pvz)
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except Exception:
-            pass
         bot.send_message(
             chat_id,
             text,
@@ -117,31 +119,12 @@ def set_language(call):
             reply_markup=types.ReplyKeyboardRemove(),
         )
     else:
-        markup = types.ReplyKeyboardMarkup(
-            resize_keyboard=True, one_time_keyboard=True
-        )
-        for name in PVZ_NAMES.values():
-            markup.add(types.KeyboardButton(name))
+        # Если зашли просто так без QR-кода, кнопок с адресами больше нет
         bot.send_message(
             chat_id,
-            'Выберите ваш ПВЗ (Точку) / Punktni tanlang:',
-            reply_markup=markup,
+            TEXTS[lang]['no_qr'],
+            reply_markup=types.ReplyKeyboardRemove(),
         )
-
-
-@bot.message_handler(func=lambda message: message.text in PVZ_NAMES.values())
-def set_pvz(message):
-    chat_id = message.chat.id
-    lang = user_lang.get(chat_id, 'ru')
-    user_pvz[chat_id] = message.text
-
-    text = TEXTS[lang]['welcome_complaint'].format(pvz=message.text)
-    bot.send_message(
-        chat_id,
-        text,
-        parse_mode='Markdown',
-        reply_markup=types.ReplyKeyboardRemove(),
-    )
 
 
 @bot.message_handler(
@@ -176,9 +159,12 @@ def handle_complaint(message):
     chat_id = message.chat.id
 
     if chat_id not in user_lang or chat_id not in user_pvz:
+        lang = user_lang.get(chat_id, 'ru')
         bot.send_message(
             chat_id,
-            'Пожалуйста, отсканируйте QR-код точки или перейдите по ссылке /start.',
+            TEXTS[lang]['no_qr']
+            if lang in TEXTS
+            else 'Пожалуйста, отсканируйте QR-код точки.',
         )
         return
 
