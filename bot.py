@@ -12,6 +12,7 @@ bot = telebot.TeleBot(TOKEN)
 user_lang = {}
 user_pvz = {}
 
+# Ваши 4 точки ПВЗ с адресами
 PVZ_NAMES = {
     'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
     'pvz2': '📍 ПВЗ №2 УРИКЗОР МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
@@ -58,6 +59,7 @@ def keep_alive():
   t.start()
 
 
+# Умный перехват любых параметров из QR-кодов (старых и новых)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
   chat_id = message.chat.id
@@ -67,8 +69,21 @@ def send_welcome(message):
   args = message.text.split()
   if len(args) > 1:
     param = args[1].lower()
-    if param in PVZ_NAMES:
-      user_pvz[chat_id] = PVZ_NAMES[param]
+    # Ловим любые варианты, зашитые в ваши QR-коды
+    if '1' in param or 'dukent' in param or 'pvz1' in param:
+      user_pvz[chat_id] = PVZ_NAMES['pvz1']
+    elif '2' in param or 'urikzor' in param or 'pvz2' in param:
+      user_pvz[chat_id] = PVZ_NAMES['pvz2']
+    elif '3' in param or 'universitet' in param or 'pvz3' in param:
+      user_pvz[chat_id] = PVZ_NAMES['pvz3']
+    elif (
+        '4' in param
+        or 'zamin' in param
+        or 'bunyodkor' in param
+        or 'angren' in param
+        or 'pvz4' in param
+    ):
+      user_pvz[chat_id] = PVZ_NAMES['pvz4']
 
   markup = types.InlineKeyboardMarkup(row_width=2)
   btn_ru = types.InlineKeyboardButton('🇷🇺 Русский', callback_data='lang_ru')
