@@ -48,7 +48,6 @@ TEXTS = {
         ),
         'success_complaint': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
         'success_praise': '✅ Ваша благодарность успешно отправлена руководству! Большое спасибо за теплые слова!',
-        'no_qr': 'Пожалуйста, отсканируйте QR-код на точке ПВЗ, чтобы обратиться к руководству.',
     },
     'uz': {
         'choose_action': 'Murojaatingiz turini tanlang:',
@@ -74,7 +73,6 @@ TEXTS = {
         ),
         'success_complaint': '✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
         'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yuborildi! Iliq so\'zlaringiz uchun katta rahmat!',
-        'no_qr': 'Iltimos, murojaat qilish uchun punktimizdagi QR-kodni skanerlang.',
     },
 }
 
@@ -105,12 +103,13 @@ def send_welcome(message):
         user_action.pop(chat_id, None)
         user_category.pop(chat_id, None)
 
+        # По умолчанию ставим точку 1 для тестов без QR
+        user_pvz[chat_id] = PVZ_NAMES['pvz1']
+
         args = message.text.split()
         if len(args) > 1:
             param = args[1].lower()
-            if '1' in param or 'dukent' in param or 'pvz1' in param:
-                user_pvz[chat_id] = PVZ_NAMES['pvz1']
-            elif '2' in param or 'urikzor' in param or 'pvz2' in param:
+            if '2' in param or 'urikzor' in param or 'pvz2' in param:
                 user_pvz[chat_id] = PVZ_NAMES['pvz2']
             elif '3' in param or 'universitet' in param or 'pvz3' in param:
                 user_pvz[chat_id] = PVZ_NAMES['pvz3']
@@ -122,10 +121,12 @@ def send_welcome(message):
                 or 'pvz4' in param
             ):
                 user_pvz[chat_id] = PVZ_NAMES['pvz4']
+            elif '1' in param or 'dukent' in param or 'pvz1' in param:
+                user_pvz[chat_id] = PVZ_NAMES['pvz1']
 
         markup = types.InlineKeyboardMarkup(row_width=2)
         btn_ru = types.InlineKeyboardButton('🇷🇺 Русский', callback_data='lang_ru')
-        btn_uz = types.InlineKeyboardButton('🇺🇿 O\'zbekcha', callback_data='lang_uz')
+        btn_uz = types.InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data='lang_uz')
         markup.add(btn_ru, btn_uz)
 
         bot.send_message(
@@ -149,19 +150,7 @@ def set_language(call):
         except Exception:
             pass
 
-        if chat_id in user_pvz:
-            show_action_menu(chat_id, lang)
-        else:
-            markup = types.ReplyKeyboardMarkup(
-                resize_keyboard=True, one_time_keyboard=True
-            )
-            for name in PVZ_NAMES.values():
-                markup.add(types.KeyboardButton(name))
-            bot.send_message(
-                chat_id,
-                'Выберите ваш ПВЗ для теста (в реальной работе будет по QR-коду):',
-                reply_markup=markup,
-            )
+        show_action_menu(chat_id, lang)
     except Exception as e:
         print(f'Error in set_language: {e}')
 
@@ -180,22 +169,11 @@ def show_action_menu(chat_id, lang):
     )
 
 
-@bot.message_handler(func=lambda message: message.text in PVZ_NAMES.values())
-def set_pvz(message):
-    try:
-        chat_id = message.chat.id
-        lang = user_lang.get(chat_id, 'ru')
-        user_pvz[chat_id] = message.text
-        show_action_menu(chat_id, lang)
-    except Exception as e:
-        print(f'Error in set_pvz: {e}')
-
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith('action_'))
 def set_action(call):
     try:
         chat_id = call.message.chat.id
-        action = call.data.split('_')[1]  # 'complaint' или 'praise'
+        action = call.data.split('_')[1]
         user_action[chat_id] = action
 
         lang = user_lang.get(chat_id, 'ru')
@@ -207,7 +185,6 @@ def set_action(call):
             pass
 
         if action == 'complaint':
-            # Если это жалоба — показываем кнопки с категориями проблем
             markup = types.InlineKeyboardMarkup(row_width=1)
             for i in range(1, 5):
                 cat_key = f'cat_{i}'
@@ -220,7 +197,6 @@ def set_action(call):
                 chat_id, TEXTS[lang]['choose_category'], reply_markup=markup
             )
         else:
-            # Если благодарность — сразу просим текст
             user_category[chat_id] = 'Благодарность'
             text = TEXTS[lang]['welcome_praise'].format(pvz=pvz)
             bot.send_message(
@@ -326,4 +302,8 @@ def handle_complaint(message):
 if __name__ == '__main__':
     keep_alive()
     print('Бот запущен в облаке...')
+    try:
+        bot.remove_webhook()  # Сбрасываем зависшие вебхуки
+    except Exception:
+        pass
     bot.infinity_polling(skip_pending=True)
