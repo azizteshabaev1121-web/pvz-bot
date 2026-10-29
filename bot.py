@@ -13,7 +13,7 @@ user_lang = {}
 user_pvz = {}
 admin_message_mapping = {}
 
-# Ваши 4 точки ПВЗ с адресами
+# Ваши точки ПВЗ с обновленными адресами
 PVZ_NAMES = {
     'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
     'pvz2': '📍 ПВЗ №2 УРИКЗОР_МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
@@ -24,9 +24,9 @@ PVZ_NAMES = {
 TEXTS = {
     'ru': {
         'welcome_complaint': (
-            'Здравствуйте! Вы обращаетесь по точке: **{pvz}**.\n\n'
+            'Здравствуйте! Вы обращаетесь по точке: {pvz}.\n\n'
             'Опишите вашу проблему или жалобу на персонал.\n'
-            '📌 **Обязательно укажите дату и точное время** инцидента, чтобы руководство могло проверить камеры видеонаблюдения.\n\n'
+            '📌 Обязательно укажите дату и точное время инцидента, чтобы руководство могло проверить камеры видеонаблюдения.\n\n'
             '(Вы можете отправить текст, фото или видео).'
         ),
         'success': '✅ Ваша жалоба и данные успешно отправлены руководству. Спасибо за помощь в улучшении сервиса!',
@@ -34,9 +34,9 @@ TEXTS = {
     },
     'uz': {
         'welcome_complaint': (
-            "Assalomu alaykum! Siz murojaat qilayotgan punkt: **{pvz}**.\n\n"
+            "Assalomu alaykum! Siz murojaat qilayotgan punkt: {pvz}.\n\n"
             "Xodimlar bo'yicha muammo yoki shikoyatingizni yozib qoldiring.\n"
-            "📌 Videokuzatuv kameralarini tekshirish uchun **sana va aniq vaqtni ko‘rsatishingiz shart**.\n\n"
+            "📌 Videokuzatuv kameralarini tekshirish uchun sana va aniq vaqtni ko‘rsatishingiz shart.\n\n"
             "(Matn, rasm yoki video yuborishingiz mumkin)."
         ),
         'success': "✅ Shikoyatingiz rahbariyatga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!",
@@ -64,67 +64,86 @@ def keep_alive():
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    chat_id = message.chat.id
-    user_lang.pop(chat_id, None)
-    user_pvz.pop(chat_id, None)
+    try:
+        chat_id = message.chat.id
+        user_lang.pop(chat_id, None)
+        user_pvz.pop(chat_id, None)
 
-    args = message.text.split()
-    if len(args) > 1:
-        param = args[1].lower()
-        if '1' in param or 'dukent' in param or 'pvz1' in param:
-            user_pvz[chat_id] = PVZ_NAMES['pvz1']
-        elif '2' in param or 'urikzor' in param or 'pvz2' in param:
-            user_pvz[chat_id] = PVZ_NAMES['pvz2']
-        elif '3' in param or 'universitet' in param or 'pvz3' in param:
-            user_pvz[chat_id] = PVZ_NAMES['pvz3']
-        elif (
-            '4' in param
-            or 'zamin' in param
-            or 'bunyodkor' in param
-            or 'angren' in param
-            or 'pvz4' in param
-        ):
-            user_pvz[chat_id] = PVZ_NAMES['pvz4']
+        args = message.text.split()
+        if len(args) > 1:
+            param = args[1].lower()
+            if '1' in param or 'dukent' in param or 'pvz1' in param:
+                user_pvz[chat_id] = PVZ_NAMES['pvz1']
+            elif '2' in param or 'urikzor' in param or 'pvz2' in param:
+                user_pvz[chat_id] = PVZ_NAMES['pvz2']
+            elif '3' in param or 'universitet' in param or 'pvz3' in param:
+                user_pvz[chat_id] = PVZ_NAMES['pvz3']
+            elif (
+                '4' in param
+                or 'zamin' in param
+                or 'bunyodkor' in param
+                or 'angren' in param
+                or 'pvz4' in param
+            ):
+                user_pvz[chat_id] = PVZ_NAMES['pvz4']
 
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_ru = types.InlineKeyboardButton('🇷🇺 Русский', callback_data='lang_ru')
-    btn_uz = types.InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data='lang_uz')
-    markup.add(btn_ru, btn_uz)
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        btn_ru = types.InlineKeyboardButton('🇷🇺 Русский', callback_data='lang_ru')
+        btn_uz = types.InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data='lang_uz')
+        markup.add(btn_ru, btn_uz)
 
-    bot.send_message(
-        chat_id,
-        'Здравствуйте! Пожалуйста, выберите язык / Tilni tanlang:',
-        reply_markup=markup,
-    )
+        bot.send_message(
+            chat_id,
+            'Здравствуйте! Пожалуйста, выберите язык / Tilni tanlang:',
+            reply_markup=markup,
+        )
+    except Exception as e:
+        print(f'Error in send_welcome: {e}')
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('lang_'))
 def set_language(call):
-    chat_id = call.message.chat.id
-    lang = call.data.split('_')[1]
-    user_lang[chat_id] = lang
-
     try:
-        bot.delete_message(chat_id, call.message.message_id)
-    except Exception:
-        pass
+        chat_id = call.message.chat.id
+        lang = call.data.split('_')[1]
+        user_lang[chat_id] = lang
 
-    if chat_id in user_pvz:
-        pvz = user_pvz[chat_id]
-        text = TEXTS[lang]['welcome_complaint'].format(pvz=pvz)
-        bot.send_message(
-            chat_id,
-            text,
-            parse_mode='Markdown',
-            reply_markup=types.ReplyKeyboardRemove(),
-        )
-    else:
-        # Если зашли просто так без QR-кода, кнопок с адресами больше нет
-        bot.send_message(
-            chat_id,
-            TEXTS[lang]['no_qr'],
-            reply_markup=types.ReplyKeyboardRemove(),
-        )
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except Exception:
+            pass
+
+        if chat_id in user_pvz:
+            pvz = user_pvz[chat_id]
+            text = TEXTS[lang]['welcome_complaint'].format(pvz=pvz)
+            bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+        else:
+            # Для удобства теста: если зашли без QR, дадим выбрать точку один раз
+            markup = types.ReplyKeyboardMarkup(
+                resize_keyboard=True, one_time_keyboard=True
+            )
+            for name in PVZ_NAMES.values():
+                markup.add(types.KeyboardButton(name))
+            bot.send_message(
+                chat_id,
+                'Выберите ваш ПВЗ для теста (в реальной работе будет по QR-коду):',
+                reply_markup=markup,
+            )
+    except Exception as e:
+        print(f'Error in set_language: {e}')
+
+
+@bot.message_handler(func=lambda message: message.text in PVZ_NAMES.values())
+def set_pvz(message):
+    try:
+        chat_id = message.chat.id
+        lang = user_lang.get(chat_id, 'ru')
+        user_pvz[chat_id] = message.text
+
+        text = TEXTS[lang]['welcome_complaint'].format(pvz=message.text)
+        bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
+    except Exception as e:
+        print(f'Error in set_pvz: {e}')
 
 
 @bot.message_handler(
@@ -138,9 +157,7 @@ def admin_reply(message):
 
         if client_id:
             bot.send_message(
-                client_id,
-                f'💬 **Ответ от руководства:**\n\n{message.text}',
-                parse_mode='Markdown',
+                client_id, f'💬 Ответ от руководства:\n\n{message.text}'
             )
             bot.reply_to(message, '✅ Ответ успешно отправлен клиенту!')
         else:
@@ -156,34 +173,34 @@ def admin_reply(message):
     content_types=['text', 'photo', 'video', 'document', 'audio']
 )
 def handle_complaint(message):
-    chat_id = message.chat.id
+    try:
+        chat_id = message.chat.id
 
-    if chat_id not in user_lang or chat_id not in user_pvz:
+        if chat_id not in user_lang or chat_id not in user_pvz:
+            bot.send_message(
+                chat_id,
+                'Пожалуйста, нажмите /start для начала работы с ботом.',
+            )
+            return
+
         lang = user_lang.get(chat_id, 'ru')
-        bot.send_message(
-            chat_id,
-            TEXTS[lang]['no_qr']
-            if lang in TEXTS
-            else 'Пожалуйста, отсканируйте QR-код точки.',
+        pvz = user_pvz.get(chat_id, 'ПВЗ (Точка)')
+
+        bot.reply_to(message, TEXTS[lang]['success'])
+
+        admin_text = (
+            f'📩 Новое обращение / жалоба!\n'
+            f'📍 ПВЗ: {pvz}\n'
+            f'👤 От: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
         )
-        return
 
-    lang = user_lang.get(chat_id, 'ru')
-    pvz = user_pvz.get(chat_id, 'ПВЗ (Точка)')
+        msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text)
+        msg2 = bot.forward_message(ADMIN_CHAT_ID, chat_id, message.message_id)
 
-    bot.reply_to(message, TEXTS[lang]['success'])
-
-    admin_text = (
-        f'📩 **Новое обращение / жалоба!**\n'
-        f'📍 ПВЗ: {pvz}\n'
-        f'👤 От: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
-    )
-
-    msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text, parse_mode='Markdown')
-    msg2 = bot.forward_message(ADMIN_CHAT_ID, chat_id, message.message_id)
-
-    admin_message_mapping[msg1.message_id] = chat_id
-    admin_message_mapping[msg2.message_id] = chat_id
+        admin_message_mapping[msg1.message_id] = chat_id
+        admin_message_mapping[msg2.message_id] = chat_id
+    except Exception as e:
+        print(f'Error in handle_complaint: {e}')
 
 
 if __name__ == '__main__':
