@@ -3,9 +3,11 @@ from threading import Thread
 from flask import Flask
 import telebot
 from telebot import types
+import requests
 
 TOKEN = '9006379873:AAFAqMpfyhsk3pPXT53OFs7tHwOue9FsH4o'
 ADMIN_CHAT_ID = '8208422375'
+GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwh1QwChd9BMCX1xVcbnY81-DwEx5oYFYYQArvhCBS_mcqeXpjjIH31GQZpHeYNaTn-Zw/exec'
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -280,14 +282,32 @@ def handle_complaint(message):
         if action == 'complaint':
             bot.reply_to(message, TEXTS[lang]['success_complaint'])
             title = f'📩 Новая жалоба ({category})!'
+            action_name = 'Жалоба'
         else:
             bot.reply_to(message, TEXTS[lang]['success_praise'])
             title = '⭐️ Новая благодарность сотруднику!'
+            action_name = 'Благодарность'
+
+        client_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {chat_id}"
+        text_content = message.text or message.caption or '[Медиафайл]'
+
+        # 📊 Автоматическая отправка данных в Google Таблицу
+        try:
+            payload = {
+                'pvz': pvz,
+                'action': action_name,
+                'category': category,
+                'client': client_info,
+                'text': text_content
+            }
+            requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
+        except Exception as sheet_err:
+            print(f'Google Sheets error: {sheet_err}')
 
         admin_text = (
             f'{title}\n'
             f'📍 ПВЗ: {pvz}\n'
-            f'👤 От: @{message.from_user.username or message.from_user.first_name} (ID: {chat_id})'
+            f'👤 От: {client_info}'
         )
 
         msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text)
