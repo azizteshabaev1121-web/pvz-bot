@@ -33,7 +33,8 @@ TEXTS = {
         'cat_1': '🗣 Грубость / Хамство',
         'cat_2': '⏳ Очередь / Медленное обслуживание',
         'cat_3': '📦 Ошибка при выдаче заказа',
-        'cat_4': '📝 Другая проблема',
+        'cat_4': '🧹 Чистота / Порядок',
+        'cat_5': '📝 Другая проблема',
         'welcome_complaint': (
             'Категория: {cat}\n'
             'Точка: {pvz}\n\n'
@@ -58,7 +59,8 @@ TEXTS = {
         'cat_1': "🗣 Qo'pol muomala / Baqirish",
         'cat_2': '⏳ Sekin xizmat / Navbat',
         'cat_3': '📦 Buyurtmadagi xatolik',
-        'cat_4': '📝 Boshqa muammo',
+        'cat_4': '🧹 Tozalik / Tartib',
+        'cat_5': '📝 Boshqa muammo',
         'welcome_complaint': (
             'Kategoriya: {cat}\n'
             'Punkt: {pvz}\n\n'
@@ -174,7 +176,7 @@ def set_action(call):
 
         if action == 'complaint':
             markup = types.InlineKeyboardMarkup(row_width=1)
-            for i in range(1, 5):
+            for i in range(1, 6):  # Теперь генерирует 5 категорий (включая чистоту)
                 cat_key = f'cat_{i}'
                 markup.add(types.InlineKeyboardButton(TEXTS[lang][cat_key], callback_data=f'category_{i}'))
             bot.send_message(chat_id, TEXTS[lang]['choose_category'], reply_markup=markup)
