@@ -18,10 +18,10 @@ user_category = {}
 admin_message_mapping = {}
 
 PVZ_NAMES = {
-    'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
-    'pvz2': '📍 ПВЗ №2 УРИКЗОР_МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
-    'pvz3': '📍 ПВЗ №3 УНИВЕРСИТЕТ (ул. Узбекистон Мустакиллиги, дом-80)',
-    'pvz4': '📍 ПВЗ №4 30-ЛЕТ_ЗАМИН-1 (ул. Бунёдкор, дом-210)',
+    'pvz1': '📍 BTP №1 DUKENT-KASKAD (14-kvartal, 6-uy)',
+    'pvz2': '📍 BTP №2 O‘RIKZOR_MARKET (Oxunboboyev ko‘chasi, 14/1-uy)',
+    'pvz3': '📍 BTP №3 UNIVERSITET (O‘zbekiston Mustaqilligi ko‘chasi, 80-uy)',
+    'pvz4': '📍 BTP №4 30-YIL ZAMIN-1 (Bunyodkor ko‘chasi, 210-uy)',
 }
 
 TEXTS = {
@@ -53,7 +53,7 @@ TEXTS = {
     },
     'uz': {
         'choose_action': 'Murojaatingiz maqsadini tanlang:',
-        'btn_complaint': '📩 PВЗ rahbariyatiga murojaat',
+        'btn_complaint': '📩 BTP rahbariyatiga murojaat',
         'btn_praise': '⭐️ Xodimga minnatdorchilik bildirish',
         'choose_category': 'Mavzu turini tanlang:',
         'cat_1': "🗣 Xodimning qo'pol muomalasi",
@@ -74,7 +74,7 @@ TEXTS = {
             '⭐️ Ishimiz haqida ijobiy fikrlarni eshitishdan mamnunmiz!\n\n'
             '(Matn, rasm yoki video yuborishingiz mumkin).'
         ),
-        'success_complaint': '✅ Murojaatingiz PВЗ rahbariyatiga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
+        'success_complaint': '✅ Murojaatingiz BTP rahbariyatiga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
         'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yetkazildi! Iliq so\'zlaringiz uchun katta rahmat!',
     },
 }
@@ -84,7 +84,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return 'PVZ Bot is active and running 24/7!'
+    return 'BTP Bot is active and running 24/7!'
 
 
 def run():
@@ -167,7 +167,7 @@ def set_action(call):
         user_action[chat_id] = action
 
         lang = user_lang.get(chat_id, 'ru')
-        pvz = user_pvz.get(chat_id, 'ПВЗ')
+        pvz = user_pvz.get(chat_id, 'BTP')
 
         try:
             bot.delete_message(chat_id, call.message.message_id)
@@ -194,7 +194,7 @@ def set_category(call):
         chat_id = call.message.chat.id
         cat_index = call.data.split('_')[1]
         lang = user_lang.get(chat_id, 'ru')
-        pvz = user_pvz.get(chat_id, 'ПВЗ')
+        pvz = user_pvz.get(chat_id, 'BTP')
 
         cat_text = TEXTS[lang][f'cat_{cat_index}']
         user_category[chat_id] = cat_text
@@ -235,14 +235,14 @@ def handle_complaint(message):
             return
 
         lang = user_lang.get(chat_id, 'ru')
-        pvz = user_pvz.get(chat_id, 'ПВЗ (Точка)')
+        pvz = user_pvz.get(chat_id, 'BTP (Punkt)')
         action = user_action.get(chat_id, 'complaint')
         category = user_category.get(chat_id, 'Не указана')
 
         if action == 'complaint':
             bot.reply_to(message, TEXTS[lang]['success_complaint'])
-            title = f'📩 Обращение к руководству ПВЗ ({category})!'
-            action_name = 'Обращение ПВЗ'
+            title = f'📩 Обращение к руководству BTP ({category})!'
+            action_name = 'Обращение BTP'
         else:
             bot.reply_to(message, TEXTS[lang]['success_praise'])
             title = '⭐️ Новая благодарность сотруднику!'
@@ -265,7 +265,7 @@ def handle_complaint(message):
 
         admin_text = (
             f'{title}\n'
-            f'📍 ПВЗ: {pvz}\n'
+            f'📍 BTP: {pvz}\n'
             f'👤 От: {client_info}'
         )
 
