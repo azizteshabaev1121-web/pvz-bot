@@ -107,6 +107,7 @@ def keep_alive():
 def send_welcome(message):
     try:
         chat_id = message.chat.id
+        # Полный сброс старых данных при новом старте
         user_lang.pop(chat_id, None)
         user_pvz_key.pop(chat_id, None)
         user_action.pop(chat_id, None)
@@ -279,6 +280,13 @@ def handle_complaint(message):
 
         admin_message_mapping[msg1.message_id] = chat_id
         admin_message_mapping[msg2.message_id] = chat_id
+
+        # СБРОС СОСТОЯНИЯ ПОЛЬЗОВАТЕЛЯ ПОСЛЕ УСПЕШНОЙ ОТПРАВКИ
+        user_lang.pop(chat_id, None)
+        user_pvz_key.pop(chat_id, None)
+        user_action.pop(chat_id, None)
+        user_category.pop(chat_id, None)
+
     except Exception as e:
         print(f'Error in handle_complaint: {e}')
 
