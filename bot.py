@@ -25,6 +25,28 @@ MAX_FILES_LIMIT = 10                  # Максимальное количес�
 MAX_FILE_SIZE_MB = 20                 # Максимальный размер одного файла в мегабайтах
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  # Переводим в байты
 
+# Текст шаблонов для закрепленного сообщения в чате администратора
+PINNED_TEMPLATES_TEXT = (
+    "📋 **ШАБЛОНЫ ОТВЕТОВ КЛИЕНТАМ**\n"
+    "(Нажмите на нужный текст, чтобы скопировать, отредактируйте и ответьте клиенту):\n\n"
+    "1️⃣ **В работу (Русский):**\n"
+    "`Здравствуйте! Спасибо за обращение. Мы уже начали разбирать эту ситуацию с сотрудниками точки.`\n\n"
+    "2️⃣ **В работу (Узбекский):**\n"
+    "`Assalomu alaykum! Murojaatingiz uchun rahmat. Biz hozirda bu holatni punkt xodimlari bilan birgalikda o‘rganib chiqyapmiz.`\n\n"
+    "3️⃣ **Уточнить детали (Русский):**\n"
+    "`Здравствуйте! Чтобы мы могли точнее во всем разобраться, подскажите, пожалуйста, точную дату, примерное время визита или номер заказа.`\n\n"
+    "4️⃣ **Уточнить детали (Узбекский):**\n"
+    "`Assalomu alaykum! Vaziyatni aniqroq o‘rganib chiqishimiz uchun, iltimos, tashrif sanasi, taxminiy vaqt yoki buyurtma raqamini yozib yuboring.`\n\n"
+    "5️⃣ **Решено / Извинения (Русский):**\n"
+    "`Здравствуйте! Спасибо, что сообщили. Мы устранили проблему и провели работу с персоналом. Приносим извинения!`\n\n"
+    "6️⃣ **Решено / Извинения (Узбекский):**\n"
+    "`Assalomu alaykum! Xabar berganingiz uchun rahmat. Muammoni bartaraf etdik, xodimlar bilan ish olib bordik. Uzr so‘raymiz!`\n\n"
+    "7️⃣ **Благодарность (Русский):**\n"
+    "`Здравствуйте! Большое спасибо за теплые слова и высокую оценку! Обязательно передадим вашу благодарность сотруднику.`\n\n"
+    "8️⃣ **Благодарность (Узбекский):**\n"
+    "`Assalomu alaykum! Iliq so‘zlaringiz uchun katta rahmat! Minnatdorchiligingizni xodimimizga yetkazamiz.`"
+)
+
 # Названия и адреса для русского языка (ПВЗ)
 PVZ_NAMES_RU = {
     'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
@@ -329,6 +351,8 @@ def handle_complaint(message):
             bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
             return
 
+        lang = user_lang.get(chat_id, 'ru')
+
         # 📏 ПРОВЕРКА РАЗМЕРА ФАЙЛА (В МЕГАБАЙТАХ)
         file_size = 0
         if message.video:
@@ -338,7 +362,6 @@ def handle_complaint(message):
         elif message.audio:
             file_size = message.audio.file_size or 0
         elif message.photo:
-            # У фото берем самое качественное разрешение в списке
             file_size = message.photo[-1].file_size or 0
 
         if file_size > MAX_FILE_SIZE_BYTES:
@@ -383,4 +406,13 @@ if __name__ == '__main__':
         bot.remove_webhook()
     except Exception:
         pass
+
+    # Автоматически отправляем и закрепляем шаблоны в админ-чате при старте
+    try:
+        pinned_msg = bot.send_message(ADMIN_CHAT_ID, PINNED_TEMPLATES_TEXT, parse_mode="Markdown")
+        bot.pin_chat_message(ADMIN_CHAT_ID, pinned_msg.message_id)
+        print('Шаблоны успешно отправлены и закреплены в чате администратора!')
+    except Exception as pin_err:
+        print(f'Не удалось закрепить шаблоны (возможно, бот не админ в чате): {pin_err}')
+
     bot.infinity_polling(skip_pending=True, interval=2, timeout=20)
