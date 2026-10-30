@@ -9,7 +9,7 @@ import requests
 
 TOKEN = '9006379873:AAFAqMpfyhsk3pPXT53OFs7tHwOue9FsH4o'
 ADMIN_CHAT_ID = '8208422375'
-GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyT1JWVJQWDR7HrNHCD-149scxrCD6sQmvaLXNdhDaGVqfyqPq6_GT7MOhraV-z8Gm2QQ/exec'
+GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw7noXOdNchqU3uBQqCx6nMngWrxIiroF4gqOawUZPyPRieZ-7oAlR8UaYkfrNgWYuc/exec'
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -17,27 +17,25 @@ user_lang = {}
 user_pvz_key = {}
 user_action = {}
 user_category = {}
-user_media_buffer = {}  # Буфер для сбора файлов
-user_timers = {}        # Таймеры автоотправки
+user_media_buffer = {}  
+user_timers = {}        
 admin_message_mapping = {}
-active_dialogue = {}    # Флаг активного диалога с клиентом после отправки обращения
+active_dialogue = {}    
 
-buffer_lock = threading.Lock()  # Блокировка для потокобезопасности
+buffer_lock = threading.Lock()  
 
-MAX_FILES_LIMIT = 10                  # Максимальное количество файлов в одном обращении
-MAX_FILE_SIZE_MB = 20                 # Максимальный размер одного файла в мегабайтах
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  # Переводим в байты
-MAX_MAPPING_SIZE = 500                # Лимит хранения ID сообщений для защиты памяти
+MAX_FILES_LIMIT = 10                  
+MAX_FILE_SIZE_MB = 20                 
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  
+MAX_MAPPING_SIZE = 500                
 
 def add_to_mapping(msg_id, client_id):
-    """Безопасное добавление в словарь с ограничением размера (защита от утечки памяти)"""
     with buffer_lock:
         admin_message_mapping[msg_id] = client_id
         if len(admin_message_mapping) > MAX_MAPPING_SIZE:
             oldest_key = next(iter(admin_message_mapping))
             admin_message_mapping.pop(oldest_key, None)
 
-# Текст шаблонов для закрепленного сообщения в чате администратора
 PINNED_TEMPLATES_TEXT = (
     "📋 **ШАБЛОНЫ ОТВЕТОВ КЛИЕНТАМ**\n"
     "(Нажмите на нужный текст, чтобы скопировать, отредактируйте и ответьте клиенту):\n\n"
@@ -63,7 +61,6 @@ PINNED_TEMPLATES_TEXT = (
     "`Assalomu alaykum! Afsuski, ushbu bot faqat bizning punktlar bo‘yicha murojaatlarni qabul qiladi. Sizning murojaatingiz boshqa punktga tegishli. Iltimos, rasmiy Uzum Market ilovasidagi qo‘llab-quvvatlash xizmatiga murojaat qiling.`"
 )
 
-# Названия и адреса для русского языка (ПВЗ)
 PVZ_NAMES_RU = {
     'pvz1': '📍 ПВЗ №1 ДУКЕНТ-КАСКАД (14-квартал, дом-6)',
     'pvz2': '📍 ПВЗ №2 УРИКЗОР_МАРКЕТ (ул. Ахунбабаева, дом-14/1)',
@@ -71,7 +68,6 @@ PVZ_NAMES_RU = {
     'pvz4': '📍 ПВЗ №4 30-ЛЕТ_ЗАМИН-1 (ул. Бунёдкор, дом-210)',
 }
 
-# Названия и адреса для узбекского языка (BTP)
 PVZ_NAMES_UZ = {
     'pvz1': '📍 BTP №1 DUKENT-KASKAD (14-kvartal, 6-uy)',
     'pvz2': '📍 BTP №2 O‘RIKZOR_MARKET (Oxunboboyev ko‘chasi, 14/1-uy)',
@@ -268,32 +264,27 @@ def admin_reply(message):
         client_id = admin_message_mapping.get(replied_id)
 
         if client_id:
-            # 1. Отправляем ответ клиенту
             msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
             add_to_mapping(msg_sent.message_id, client_id)
             
-            # 2. Записываем ответ администратора в Google Таблицу (журнал учета)
+            # Обновляем ту же строку в таблице
             try:
-                client_info = f"ID: {client_id}"
                 payload = {
-                    'pvz': 'Ответ руководства',
-                    'action': 'Ответ администратора',
-                    'category': 'Резолюция / Ответ',
-                    'client': client_info,
+                    'type': 'admin_reply',
+                    'client': str(client_id),
                     'text': message.text
                 }
                 requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
             except Exception as sheet_err:
                 print(f'Google Sheets error on admin reply: {sheet_err}')
 
-            bot.reply_to(message, '✅ Ответ отправлен клиенту и зафиксирован в таблице!')
+            bot.reply_to(message, '✅ Ответ отправлен клиенту и записан в строку таблицы!')
         else:
             bot.reply_to(message, '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение нового обращения.')
     except Exception as e:
         bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
 
 def send_buffered_appeal(chat_id):
-    """Функция автоматической отправки накопленных сообщений после паузы (с защитой потоков)"""
     try:
         with buffer_lock:
             if chat_id not in user_media_buffer or not user_media_buffer[chat_id]:
@@ -306,7 +297,6 @@ def send_buffered_appeal(chat_id):
             action = user_action.get(chat_id, 'complaint')
             category = user_category.get(chat_id, 'Не указана')
 
-            # Очищаем буфер и таймер под блокировкой
             user_media_buffer.pop(chat_id, None)
             if chat_id in user_timers:
                 user_timers[chat_id].cancel()
@@ -335,7 +325,6 @@ def send_buffered_appeal(chat_id):
 
         combined_text = " \n".join(all_texts) if all_texts else ("[Медиафайлы без текста]" if has_media else "Обращение без текста")
 
-        # Отправка в Google Таблицу
         try:
             payload = {
                 'pvz': pvz,
@@ -348,7 +337,6 @@ def send_buffered_appeal(chat_id):
         except Exception as sheet_err:
             print(f'Google Sheets error: {sheet_err}')
 
-        # Уведомление администратору
         label_pvz = 'ПВЗ' if lang == 'ru' else 'BTP'
         admin_text = (
             f'{title}\n'
@@ -386,7 +374,6 @@ def handle_complaint(message):
         chat_id = message.chat.id
 
         with buffer_lock:
-            # Если клиент находится в режиме диалога после отправки обращения, пересылаем его ответ админу
             if active_dialogue.get(chat_id):
                 client_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {chat_id}"
                 
@@ -408,7 +395,6 @@ def handle_complaint(message):
 
             lang = user_lang.get(chat_id, 'ru')
 
-            # 📏 ПРОВЕРКА РАЗМЕРА ФАЙЛА (В МЕГАБАЙТАХ)
             file_size = 0
             if message.video:
                 file_size = message.video.file_size or 0
@@ -431,20 +417,16 @@ def handle_complaint(message):
             if chat_id not in user_media_buffer:
                 user_media_buffer[chat_id] = []
 
-            # ПРОВЕРКА ЛИМИТА НА КОЛИЧЕСТВО ФАЙЛОВ
             if len(user_media_buffer[chat_id]) >= MAX_FILES_LIMIT:
                 if chat_id in user_timers:
                     user_timers[chat_id].cancel()
                     user_timers.pop(chat_id, None)
-                # Вызываем отправку вне блока проверки лимита (или аккуратно)
                 threading.Thread(target=send_buffered_appeal, args=(chat_id,)).start()
                 bot.send_message(chat_id, f'⚠️ Достигнут лимит в {MAX_FILES_LIMIT} файлов. Ваше обращение отправлено автоматически.')
                 return
 
-            # Добавляем файл/текст в буфер
             user_media_buffer[chat_id].append(message)
 
-            # Сбрасываем старый таймер и запускаем новый на 8 секунд
             if chat_id in user_timers:
                 user_timers[chat_id].cancel()
 
@@ -464,7 +446,6 @@ if __name__ == '__main__':
     except Exception:
         pass
 
-    # Автоматически отправляем и закрепляем шаблоны в админ-чате при старте
     try:
         pinned_msg = bot.send_message(ADMIN_CHAT_ID, PINNED_TEMPLATES_TEXT, parse_mode="Markdown")
         bot.pin_chat_message(ADMIN_CHAT_ID, pinned_msg.message_id)
