@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from threading import Thread
 from flask import Flask
 import telebot
@@ -16,8 +17,13 @@ user_lang = {}
 user_pvz_key = {}
 user_action = {}
 user_category = {}
-user_media_buffer = {}  # Буфер для сбора нескольких фото/текстов от клиента
+user_media_buffer = {}  # Буфер для сбора файлов
+user_timers = {}        # Таймеры автоотправки
 admin_message_mapping = {}
+
+MAX_FILES_LIMIT = 10                  # Максимальное количество файлов в одном обращении
+MAX_FILE_SIZE_MB = 20                 # Максимальный размер одного файла в мегабайтах
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  # Переводим в байты
 
 # Названия и адреса для русского языка (ПВЗ)
 PVZ_NAMES_RU = {
@@ -50,13 +56,11 @@ TEXTS = {
             'Категория: {cat}\n'
             'Точка: {pvz}\n\n'
             'Опишите детали вашего обращения.\n'
-            '📌 Вы можете отправить **несколько фото, видео или текстов**. '
-            'Когда закончите, нажмите кнопку **«✅ Отправить»** внизу экрана 👇'
+            f'📌 Можно отправить до {MAX_FILES_LIMIT} файлов (каждый до {MAX_FILE_SIZE_MB} МБ). Бот подождет и отправит всё автоматически.'
         ),
         'welcome_praise': (
             'Вы выбрали: Поблагодарить сотрудника (точка: {pvz}).\n\n'
-            'Напишите ваши слова благодарности или отправьте фото/видео.\n'
-            'Когда закончите, нажмите кнопку **«✅ Отправить»** внизу экрана 👇'
+            'Напишите ваши слова благодарности или отправьте фото/видео.'
         ),
         'success_complaint': '✅ Ваше обращение успешно направлено руководству ПВЗ. Спасибо за помощь в улучшении сервиса!',
         'success_praise': '✅ Ваша благодарность успешно передана руководству! Большое спасибо за теплые слова!',
@@ -75,13 +79,11 @@ TEXTS = {
             'Kategoriya: {cat}\n'
             'Punkt: {pvz}\n\n'
             'Murojaatingiz tafsilotlarini yozib qoldiring.\n'
-            '📌 Siz **bir nechta rasm, video yoki matn** yuborishingiz mumkin. '
-            'Tugatgach, pastdagi **«✅ Yuborish»** tugmasini bosing 👇'
+            f'📌 Ko‘pi bilan {MAX_FILES_LIMIT} ta fayl (har biri {MAX_FILE_SIZE_MB} MB gacha) yuborishingiz mumkin. Bot kutib, avtomatik yuboradi.'
         ),
         'welcome_praise': (
             'Siz tanladingiz: Xodimga minnatdorchilik bildirish (punkt: {pvz}).\n\n'
-            'Minnatdorchilik so‘zlaringizni yoki rasmlarni yuboring.\n'
-            'Tugatgach, pastdagi **«✅ Yuborish»** tugmasini bosing 👇'
+            'Minnatdorchilik so‘zlaringizni yoki rasmlarni yuboring.'
         ),
         'success_complaint': '✅ Murojaatingiz BTP rahbariyatiga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
         'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yetkazildi! Iliq so\'zlaringiz uchun katta rahmat!',
@@ -106,12 +108,14 @@ def keep_alive():
 def send_welcome(message):
     try:
         chat_id = message.chat.id
-        # Сброс всех старых данных при новом старте
         user_lang.pop(chat_id, None)
         user_pvz_key.pop(chat_id, None)
         user_action.pop(chat_id, None)
         user_category.pop(chat_id, None)
         user_media_buffer.pop(chat_id, None)
+        if chat_id in user_timers:
+            user_timers[chat_id].cancel()
+            user_timers.pop(chat_id, None)
 
         current_pvz_key = 'pvz1'
         args = message.text.split()
@@ -188,13 +192,9 @@ def set_action(call):
             bot.send_message(chat_id, TEXTS[lang]['choose_category'], reply_markup=markup)
         else:
             user_category[chat_id] = 'Благодарность' if lang == 'ru' else 'Minnatdorchilik'
-            user_media_buffer[chat_id] = []  # Инициализируем буфер
+            user_media_buffer[chat_id] = []
             text = TEXTS[lang]['welcome_praise'].format(pvz=pvz)
-            
-            # Показываем кнопку завершения отправки
-            reply_markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-            reply_markup.add(types.KeyboardButton('✅ Отправить' if lang == 'ru' else '✅ Yuborish'))
-            bot.send_message(chat_id, text, reply_markup=reply_markup)
+            bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
     except Exception as e:
         print(f'Error in set_action: {e}')
 
@@ -209,7 +209,7 @@ def set_category(call):
 
         cat_text = TEXTS[lang][f'cat_{cat_index}']
         user_category[chat_id] = cat_text
-        user_media_buffer[chat_id] = []  # Инициализируем буфер
+        user_media_buffer[chat_id] = []
 
         try:
             bot.delete_message(chat_id, call.message.message_id)
@@ -217,11 +217,7 @@ def set_category(call):
             pass
 
         text = TEXTS[lang]['welcome_complaint'].format(cat=cat_text, pvz=pvz)
-        
-        # Показываем кнопку завершения отправки
-        reply_markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-        reply_markup.add(types.KeyboardButton('✅ Отправить' if lang == 'ru' else '✅ Yuborish'))
-        bot.send_message(chat_id, text, reply_markup=reply_markup)
+        bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
     except Exception as e:
         print(f'Error in set_category: {e}')
 
@@ -239,6 +235,91 @@ def admin_reply(message):
     except Exception as e:
         bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
 
+def send_buffered_appeal(chat_id):
+    """Функция автоматической отправки накопленных сообщений после паузы"""
+    try:
+        if chat_id not in user_media_buffer or not user_media_buffer[chat_id]:
+            return
+
+        buffer = user_media_buffer[chat_id]
+        lang = user_lang.get(chat_id, 'ru')
+        p_key = user_pvz_key.get(chat_id, 'pvz1')
+        pvz = PVZ_NAMES_RU[p_key] if lang == 'ru' else PVZ_NAMES_UZ[p_key]
+        action = user_action.get(chat_id, 'complaint')
+        category = user_category.get(chat_id, 'Не указана')
+
+        if action == 'complaint':
+            success_text = TEXTS[lang]['success_complaint']
+            title = f'📩 Обращение к руководству ПВЗ ({category})!' if lang == 'ru' else f'📩 BTP rahbariyatiga murojaat ({category})!'
+            action_name = 'Обращение ПВЗ' if lang == 'ru' else 'BTP Murojaat'
+        else:
+            success_text = TEXTS[lang]['success_praise']
+            title = '⭐️ Новая благодарность сотруднику!' if lang == 'ru' else '⭐️ Xodimga yangi minnatdorchilik!'
+            action_name = 'Благодарность' if lang == 'ru' else 'Minnatdorchilik'
+
+        first_msg = buffer[0]
+        client_info = f"@{first_msg.from_user.username}" if first_msg.from_user.username else f"ID: {chat_id}"
+
+        # Собираем все тексты и подписи
+        all_texts = []
+        has_media = False
+        for msg in buffer:
+            txt = msg.text or msg.caption
+            if txt:
+                all_texts.append(txt)
+            if msg.content_type in ['photo', 'video', 'document', 'audio']:
+                has_media = True
+
+        combined_text = " \n".join(all_texts) if all_texts else ("[Медиафайлы без текста]" if has_media else "Обращение без текста")
+
+        # Отправка в Google Таблицу
+        try:
+            payload = {
+                'pvz': pvz,
+                'action': action_name,
+                'category': category,
+                'client': client_info,
+                'text': combined_text
+            }
+            requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
+        except Exception as sheet_err:
+            print(f'Google Sheets error: {sheet_err}')
+
+        # Уведомление администратору
+        label_pvz = 'ПВЗ' if lang == 'ru' else 'BTP'
+        admin_text = (
+            f'{title}\n'
+            f'📍 {label_pvz}: {pvz}\n'
+            f'👤 От: {client_info}\n'
+            f'💬 Описание: {combined_text}'
+        )
+
+        msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text)
+        admin_message_mapping[msg1.message_id] = chat_id
+
+        # Пересылка всех файлов/фото администратору
+        for msg in buffer:
+            if msg.content_type in ['photo', 'video', 'document', 'audio']:
+                try:
+                    msg_f = bot.forward_message(ADMIN_CHAT_ID, chat_id, msg.message_id)
+                    admin_message_mapping[msg_f.message_id] = chat_id
+                except Exception:
+                    pass
+
+        # Отправка подтверждения клиенту
+        bot.send_message(chat_id, success_text)
+
+        # Полная очистка сессии пользователя
+        user_lang.pop(chat_id, None)
+        user_pvz_key.pop(chat_id, None)
+        user_action.pop(chat_id, None)
+        user_category.pop(chat_id, None)
+        user_media_buffer.pop(chat_id, None)
+        user_timers.pop(chat_id, None)
+
+    except Exception as e:
+        print(f'Error in send_buffered_appeal: {e}')
+
 @bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'audio'])
 def handle_complaint(message):
     try:
@@ -248,101 +329,48 @@ def handle_complaint(message):
             bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
             return
 
-        lang = user_lang.get(chat_id, 'ru')
-        send_btn_text = '✅ Отправить' if lang == 'ru' else '✅ Yuborish'
+        # 📏 ПРОВЕРКА РАЗМЕРА ФАЙЛА (В МЕГАБАЙТАХ)
+        file_size = 0
+        if message.video:
+            file_size = message.video.file_size or 0
+        elif message.document:
+            file_size = message.document.file_size or 0
+        elif message.audio:
+            file_size = message.audio.file_size or 0
+        elif message.photo:
+            # У фото берем самое качественное разрешение в списке
+            file_size = message.photo[-1].file_size or 0
 
-        # Если клиент нажал кнопку завершения отправки
-        if message.text == send_btn_text:
-            buffer = user_media_buffer.get(chat_id, [])
-            if not buffer:
-                bot.send_message(chat_id, 'Вы еще ничего не отправили. Пожалуйста, отправьте текст, фото или видео, затем нажмите «Отправить».')
-                return
-
-            p_key = user_pvz_key.get(chat_id, 'pvz1')
-            pvz = PVZ_NAMES_RU[p_key] if lang == 'ru' else PVZ_NAMES_UZ[p_key]
-            action = user_action.get(chat_id, 'complaint')
-            category = user_category.get(chat_id, 'Не указана')
-
-            if action == 'complaint':
-                title = f'📩 Обращение к руководству ПВЗ ({category})!' if lang == 'ru' else f'📩 BTP rahbariyatiga murojaat ({category})!'
-                action_name = 'Обращение ПВЗ' if lang == 'ru' else 'BTP Murojaat'
-            else:
-                title = '⭐️ Новая благодарность сотруднику!' if lang == 'ru' else '⭐️ Xodimga yangi minnatdorchilik!'
-                action_name = 'Благодарность' if lang == 'ru' else 'Minnatdorchilik'
-
-            client_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {chat_id}"
-
-            # Собираем все тексты и подписи из буфера
-            all_texts = []
-            has_media = False
-            for msg in buffer:
-                txt = msg.text or msg.caption
-                if txt:
-                    all_texts.append(txt)
-                if msg.content_type in ['photo', 'video', 'document', 'audio']:
-                    has_media = True
-
-            combined_text = " \n".join(all_texts) if all_texts else ("[Медиафайлы без текста]" if has_media else "Обращение без текста")
-
-            # Отправляем в Google Таблицу
-            try:
-                payload = {
-                    'pvz': pvz,
-                    'action': action_name,
-                    'category': category,
-                    'client': client_info,
-                    'text': combined_text
-                }
-                requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
-            except Exception as sheet_err:
-                print(f'Google Sheets error: {sheet_err}')
-
-            # Отправляем текстовое уведомление администратору
-            label_pvz = 'ПВЗ' if lang == 'ru' else 'BTP'
-            admin_text = (
-                f'{title}\n'
-                f'📍 {label_pvz}: {pvz}\n'
-                f'👤 От: {client_info}\n'
-                f'💬 Описание: {combined_text}'
-            )
-            msg_admin = bot.send_message(ADMIN_CHAT_ID, admin_text)
-            admin_message_mapping[msg_admin.message_id] = chat_id
-
-            # Пересылаем все собранные файлы/фото администратору
-            for msg in buffer:
-                if msg.content_type in ['photo', 'video', 'document', 'audio']:
-                    try:
-                        f_msg = bot.forward_message(ADMIN_CHAT_ID, chat_id, msg.message_id)
-                        admin_message_mapping[f_msg.message_id] = chat_id
-                    except Exception:
-                        pass
-
-            # Отправляем клиенту сообщение об успехе и убираем кнопку
-            if action == 'complaint':
-                bot.send_message(chat_id, TEXTS[lang]['success_complaint'], reply_markup=types.ReplyKeyboardRemove())
-            else:
-                bot.send_message(chat_id, TEXTS[lang]['success_praise'], reply_markup=types.ReplyKeyboardRemove())
-
-            # Сбрасываем состояние пользователя
-            user_lang.pop(chat_id, None)
-            user_pvz_key.pop(chat_id, None)
-            user_action.pop(chat_id, None)
-            user_category.pop(chat_id, None)
-            user_media_buffer.pop(chat_id, None)
-
-        else:
-            # Если клиент отправляет файл или текст — просто сохраняем в буфер
-            if chat_id not in user_media_buffer:
-                user_media_buffer[chat_id] = []
-            user_media_buffer[chat_id].append(message)
-
-            count = len(user_media_buffer[chat_id])
-            confirm_text = (
-                f'✅ Файл/текст добавлен (всего: {count}). Можете отправить еще или нажать кнопку **«✅ Отправить»** внизу.'
+        if file_size > MAX_FILE_SIZE_BYTES:
+            warning_text = (
+                f'⚠️ Этот файл слишком большой! Максимальный размер одного файла — {MAX_FILE_SIZE_MB} МБ.'
                 if lang == 'ru'
-                else f'✅ Fayl/matn qo‘shildi (jami: {count}). Yana yuborishingiz yoki pastdagi **«✅ Yuborish»** tugmasini bosishingiz mumkin.'
+                else f'⚠️ Bu fayl juda katta! Har bir fayl uchun maksimal hajm — {MAX_FILE_SIZE_MB} MB.'
             )
-            bot.send_message(chat_id, confirm_text)
+            bot.send_message(chat_id, warning_text)
+            return
+
+        if chat_id not in user_media_buffer:
+            user_media_buffer[chat_id] = []
+
+        # ПРОВЕРКА ЛИМИТА НА КОЛИЧЕСТВО ФАЙЛОВ
+        if len(user_media_buffer[chat_id]) >= MAX_FILES_LIMIT:
+            if chat_id in user_timers:
+                user_timers[chat_id].cancel()
+            send_buffered_appeal(chat_id)
+            bot.send_message(chat_id, f'⚠️ Достигнут лимит в {MAX_FILES_LIMIT} файлов. Ваше обращение отправлено автоматически.')
+            return
+
+        # Добавляем файл/текст в буфер
+        user_media_buffer[chat_id].append(message)
+
+        # Сбрасываем старый таймер и запускаем новый на 8 секунд
+        if chat_id in user_timers:
+            user_timers[chat_id].cancel()
+
+        timer = threading.Timer(8.0, send_buffered_appeal, args=[chat_id])
+        user_timers[chat_id] = timer
+        timer.start()
 
     except Exception as e:
         print(f'Error in handle_complaint: {e}')
