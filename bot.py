@@ -278,7 +278,6 @@ def admin_reply(message):
             msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
             add_to_mapping(msg_sent.message_id, client_id)
             
-            # Асинхронный запрос в таблицу, чтобы не морозить бота
             def send_to_sheets_async():
                 try:
                     payload = {
@@ -339,7 +338,6 @@ def send_buffered_appeal(chat_id):
 
         combined_text = " \n".join(all_texts) if all_texts else ("[Медиафайлы без текста]" if has_media else "Обращение без текста")
 
-        # Асинхронная отправка в Google Таблицу
         def send_to_sheets_async():
             try:
                 payload = {
@@ -390,67 +388,78 @@ def send_buffered_appeal(chat_id):
 def handle_complaint(message):
     try:
         chat_id = message.chat.id
+        username = message.from_user.username
 
         with buffer_lock:
-            if active_dialogue.get(chat_id):
-                client_info = f"@{message.from_user.username} (ID: {chat_id})" if message.from_user.username else f"ID: {chat_id}"
-                
-                if message.content_type == 'text':
-                    admin_text = f"💬 Ответ от клиента ({client_info}):\n\n{message.text}"
-                    msg_forwarded = bot.send_message(ADMIN_CHAT_ID, admin_text)
-                    add_to_mapping(msg_forwarded.message_id, chat_id)
-                else:
-                    caption = f"💬 Медиа-ответ от клиента ({client_info})" + (f": {message.caption}" if message.caption else "")
-                    msg_forwarded = bot.copy_message(ADMIN_CHAT_ID, chat_id, message.message_id, caption=caption)
-                    add_to_mapping(msg_forwarded.message_id, chat_id)
-                
-                bot.reply_to(message, "✅ Ваше сообщение отправлено руководству.")
-                return
+            is_active = active_dialogue.get(chat_id, False)
 
-            if chat_id not in user_lang or chat_id not in user_pvz_key or chat_id not in user_action or chat_id not in user_category:
-                bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
-                return
+        if is_active:
+            client_info = f"@{username} (ID: {chat_id})" if username else f"ID: {chat_id}"
+            if message.content_type == 'text':
+                admin_text = f"💬 Ответ от клиента ({client_info}):\n\n{message.text}"
+                msg_forwarded = bot.send_message(ADMIN_CHAT_ID, admin_text)
+                add_to_mapping(msg_forwarded.message_id, chat_id)
+            else:
+                caption = f"💬 Медиа-ответ от клиента ({client_info})" + (f": {message.caption}" if message.caption else "")
+                msg_forwarded = bot.copy_message(ADMIN_CHAT_ID, chat_id, message.message_id, caption=caption)
+                add_to_mapping(msg_forwarded.message_id, chat_id)
+            
+            bot.reply_to(message, "✅ Ваше сообщение отправлено руководству.")
+            return
 
+        with buffer_lock:
+            has_lang = chat_id in user_lang
+            has_pvz = chat_id in user_pvz_key
+            has_action = chat_id in user_action
+            has_category = chat_id in user_category
             lang = user_lang.get(chat_id, 'ru')
 
-            file_size = 0
-            if message.video:
-                file_size = message.video.file_size or 0
-            elif message.document:
-                file_size = message.document.file_size or 0
-            elif message.audio:
-                file_size = message.audio.file_size or 0
-            elif message.photo:
-                file_size = message.photo[-1].file_size or 0
+        if not (has_lang and has_pvz and has_action and has_category):
+            bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
+            return
 
-            if file_size > MAX_FILE_SIZE_BYTES:
-                warning_text = (
-                    f'⚠️ Этот файл слишком большой! Максимальный размер одного файла — {MAX_FILE_SIZE_MB} МБ.'
-                    if lang == 'ru'
-                    else f'⚠️ Bu fayl juda katta! Har bir fayl uchun maksimal hajm — {MAX_FILE_SIZE_MB} MB.'
-                )
-                bot.send_message(chat_id, warning_text)
-                return
+        file_size = 0
+        if message.video:
+            file_size = message.video.file_size or 0
+        elif message.document:
+            file_size = message.document.file_size or 0
+        elif message.audio:
+            file_size = message.audio.file_size or 0
+        elif message.photo:
+            file_size = message.photo[-1].file_size or 0
 
+        if file_size > MAX_FILE_SIZE_BYTES:
+            warning_text = (
+                f'⚠️ Этот файл слишком большой! Максимальный размер одного файла — {MAX_FILE_SIZE_MB} МБ.'
+                if lang == 'ru'
+                else f'⚠️ Bu fayl juda katta! Har bir fayl uchun maksimal hajm — {MAX_FILE_SIZE_MB} MB.'
+            )
+            bot.send_message(chat_id, warning_text)
+            return
+
+        reached_limit = False
+        with buffer_lock:
             if chat_id not in user_media_buffer:
                 user_media_buffer[chat_id] = []
 
+            user_media_buffer[chat_id].append(message)
+
             if len(user_media_buffer[chat_id]) >= MAX_FILES_LIMIT:
+                reached_limit = True
                 if chat_id in user_timers:
                     user_timers[chat_id].cancel()
                     user_timers.pop(chat_id, None)
-                threading.Thread(target=send_buffered_appeal, args=(chat_id,)).start()
-                bot.send_message(chat_id, f'⚠️ Достигнут лимит в {MAX_FILES_LIMIT} файлов. Ваше обращение отправлено автоматически.')
-                return
+            else:
+                if chat_id in user_timers:
+                    user_timers[chat_id].cancel()
 
-            user_media_buffer[chat_id].append(message)
+                timer = threading.Timer(8.0, send_buffered_appeal, args=[chat_id])
+                user_timers[chat_id] = timer
+                timer.start()
 
-            if chat_id in user_timers:
-                user_timers[chat_id].cancel()
-
-            timer = threading.Timer(8.0, send_buffered_appeal, args=[chat_id])
-            user_timers[chat_id] = timer
-            timer.start()
+        if reached_limit:
+            threading.Thread(target=send_buffered_appeal, args=(chat_id,)).start()
+            bot.send_message(chat_id, f'⚠️ Достигнут лимит в {MAX_FILES_LIMIT} файлов. Ваше обращение отправлено автоматически.')
 
     except Exception as e:
         print(f'Error in handle_complaint: {e}')
@@ -471,7 +480,6 @@ if __name__ == '__main__':
     except Exception as pin_err:
         print(f'Не удалось закрепить шаблоны (возможно, бот не админ в чате): {pin_err}')
 
-    # Защищенный цикл поллинга с автоперезапуском при любых сбоях сети
     while True:
         try:
             print('Старт приема сообщений (polling)...')
