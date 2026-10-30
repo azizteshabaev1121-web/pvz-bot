@@ -9,7 +9,7 @@ import requests
 
 TOKEN = '9006379873:AAFAqMpfyhsk3pPXT53OFs7tHwOue9FsH4o'
 ADMIN_CHAT_ID = '8208422375'
-GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw7noXOdNchqU3uBQqCx6nMngWrxIiroF4gqOawUZPyPRieZ-7oAlR8UaYkfrNgWYuc/exec'
+GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzQKLZvDOIOFLlcrtUjCt9jhLPf2DSkWOKgHyHb28HzASM8-8KkIYtN8DamLQVi57XejA/exec'
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -267,7 +267,6 @@ def admin_reply(message):
             msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
             add_to_mapping(msg_sent.message_id, client_id)
             
-            # Обновляем ту же строку в таблице
             try:
                 payload = {
                     'type': 'admin_reply',
@@ -312,7 +311,7 @@ def send_buffered_appeal(chat_id):
             action_name = 'Благодарность' if lang == 'ru' else 'Minnatdorchilik'
 
         first_msg = buffer[0]
-        client_info = f"@{first_msg.from_user.username}" if first_msg.from_user.username else f"ID: {chat_id}"
+        client_info = f"@{first_msg.from_user.username} (ID: {chat_id})" if first_msg.from_user.username else f"ID: {chat_id}"
 
         all_texts = []
         has_media = False
@@ -375,7 +374,7 @@ def handle_complaint(message):
 
         with buffer_lock:
             if active_dialogue.get(chat_id):
-                client_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {chat_id}"
+                client_info = f"@{message.from_user.username} (ID: {chat_id})" if message.from_user.username else f"ID: {chat_id}"
                 
                 if message.content_type == 'text':
                     admin_text = f"💬 Ответ от клиента ({client_info}):\n\n{message.text}"
