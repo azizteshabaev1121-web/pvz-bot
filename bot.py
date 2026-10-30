@@ -20,6 +20,7 @@ user_category = {}
 user_media_buffer = {}  # Буфер для сбора файлов
 user_timers = {}        # Таймеры автоотправки
 admin_message_mapping = {}
+active_dialogue = {}    # Флаг активного диалога с клиентом после отправки обращения
 
 MAX_FILES_LIMIT = 10                  # Максимальное количество файлов в одном обращении
 MAX_FILE_SIZE_MB = 20                 # Максимальный размер одного файла в мегабайтах
@@ -139,6 +140,7 @@ def send_welcome(message):
         user_action.pop(chat_id, None)
         user_category.pop(chat_id, None)
         user_media_buffer.pop(chat_id, None)
+        active_dialogue.pop(chat_id, None)
         if chat_id in user_timers:
             user_timers[chat_id].cancel()
             user_timers.pop(chat_id, None)
@@ -254,7 +256,8 @@ def admin_reply(message):
         client_id = admin_message_mapping.get(replied_id)
 
         if client_id:
-            bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
+            msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
+            admin_message_mapping[msg_sent.message_id] = client_id
             bot.reply_to(message, '✅ Ответ успешно отправлен клиенту!')
         else:
             bot.reply_to(message, '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение нового обращения.')
@@ -335,13 +338,15 @@ def send_buffered_appeal(chat_id):
         # Отправка подтверждения клиенту
         bot.send_message(chat_id, success_text)
 
-        # Полная очистка сессии пользователя
+        # Полная очистка сессии и включение режима активного диалога
         user_lang.pop(chat_id, None)
         user_pvz_key.pop(chat_id, None)
         user_action.pop(chat_id, None)
         user_category.pop(chat_id, None)
         user_media_buffer.pop(chat_id, None)
         user_timers.pop(chat_id, None)
+        
+        active_dialogue[chat_id] = True
 
     except Exception as e:
         print(f'Error in send_buffered_appeal: {e}')
@@ -350,6 +355,22 @@ def send_buffered_appeal(chat_id):
 def handle_complaint(message):
     try:
         chat_id = message.chat.id
+
+        # Если клиент находится в режиме диалога после отправки обращения, пересылаем его ответ админу
+        if active_dialogue.get(chat_id):
+            client_info = f"@{message.from_user.username}" if message.from_user.username else f"ID: {chat_id}"
+            
+            if message.content_type == 'text':
+                admin_text = f"💬 Ответ от клиента ({client_info}):\n\n{message.text}"
+                msg_forwarded = bot.send_message(ADMIN_CHAT_ID, admin_text)
+                admin_message_mapping[msg_forwarded.message_id] = chat_id
+            else:
+                caption = f"💬 Медиа-ответ от клиента ({client_info})" + (f": {message.caption}" if message.caption else "")
+                msg_forwarded = bot.copy_message(ADMIN_CHAT_ID, chat_id, message.message_id, caption=caption)
+                admin_message_mapping[msg_forwarded.message_id] = chat_id
+            
+            bot.reply_to(message, "✅ Ваше сообщение отправлено руководству.")
+            return
 
         if chat_id not in user_lang or chat_id not in user_pvz_key or chat_id not in user_action or chat_id not in user_category:
             bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
