@@ -44,7 +44,11 @@ PINNED_TEMPLATES_TEXT = (
     "7️⃣ **Благодарность (Русский):**\n"
     "`Здравствуйте! Большое спасибо за теплые слова и высокую оценку! Обязательно передадим вашу благодарность сотруднику.`\n\n"
     "8️⃣ **Благодарность (Узбекский):**\n"
-    "`Assalomu alaykum! Iliq so‘zlaringiz uchun katta rahmat! Minnatdorchiligingizni xodimimizga yetkazamiz.`"
+    "`Assalomu alaykum! Iliq so‘zlaringiz uchun katta rahmat! Minnatdorchiligingizni xodimimizga yetkazamiz.`\n\n"
+    "9️⃣ **Другой ПВЗ / Не наша точка (Русский):**\n"
+    "`Здравствуйте! К сожалению, этот бот принимает обращения только по нашим точкам. Ваша проблема относится к другому пункту выдачи. Пожалуйста, обратитесь в официальную службу поддержки в приложении Uzum Market.`\n\n"
+    "🔟 **Другой ПВЗ / Не наша точка (Узбекский):**\n"
+    "`Assalomu alaykum! Afsuski, ushbu bot faqat bizning punktlar bo‘yicha murojaatlarni qabul qiladi. Sizning murojaatingiz boshqa punktga tegishli. Iltimos, rasmiy Uzum Market ilovasidagi qo‘llab-quvvatlash xizmatiga murojaat qiling.`"
 )
 
 # Названия и адреса для русского языка (ПВЗ)
