@@ -25,10 +25,10 @@ active_dialogue = {}
 
 buffer_lock = threading.Lock()  
 
-MAX_FILES_LIMIT = 10                  
-MAX_FILE_SIZE_MB = 20                 
+MAX_FILES_LIMIT = 10                
+MAX_FILE_SIZE_MB = 20               
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  
-MAX_MAPPING_SIZE = 500                
+MAX_MAPPING_SIZE = 500              
 
 def add_to_mapping(msg_id, client_id):
     with buffer_lock:
@@ -264,7 +264,6 @@ def admin_reply(message):
         replied_id = message.reply_to_message.message_id
         client_id = admin_message_mapping.get(replied_id)
 
-        # 🛡 Страховка: если бот перезагружался, ищем ID клиента прямо в тексте сообщения с помощью регулярного выражения
         if not client_id and message.reply_to_message.text:
             match = re.search(r'ID:\s*(\d+)', message.reply_to_message.text)
             if match:
@@ -279,15 +278,19 @@ def admin_reply(message):
             msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
             add_to_mapping(msg_sent.message_id, client_id)
             
-            try:
-                payload = {
-                    'type': 'admin_reply',
-                    'client': str(client_id),
-                    'text': message.text
-                }
-                requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
-            except Exception as sheet_err:
-                print(f'Google Sheets error on admin reply: {sheet_err}')
+            # Асинхронный запрос в таблицу, чтобы не морозить бота
+            def send_to_sheets_async():
+                try:
+                    payload = {
+                        'type': 'admin_reply',
+                        'client': str(client_id),
+                        'text': message.text
+                    }
+                    requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
+                except Exception as sheet_err:
+                    print(f'Google Sheets error on admin reply: {sheet_err}')
+            
+            threading.Thread(target=send_to_sheets_async).start()
 
             bot.reply_to(message, '✅ Ответ отправлен клиенту и записан в строку таблицы!')
         else:
@@ -336,17 +339,21 @@ def send_buffered_appeal(chat_id):
 
         combined_text = " \n".join(all_texts) if all_texts else ("[Медиафайлы без текста]" if has_media else "Обращение без текста")
 
-        try:
-            payload = {
-                'pvz': pvz,
-                'action': action_name,
-                'category': category,
-                'client': client_info,
-                'text': combined_text
-            }
-            requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
-        except Exception as sheet_err:
-            print(f'Google Sheets error: {sheet_err}')
+        # Асинхронная отправка в Google Таблицу
+        def send_to_sheets_async():
+            try:
+                payload = {
+                    'pvz': pvz,
+                    'action': action_name,
+                    'category': category,
+                    'client': client_info,
+                    'text': combined_text
+                }
+                requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
+            except Exception as sheet_err:
+                print(f'Google Sheets error: {sheet_err}')
+        
+        threading.Thread(target=send_to_sheets_async).start()
 
         label_pvz = 'ПВЗ' if lang == 'ru' else 'BTP'
         admin_text = (
@@ -464,4 +471,11 @@ if __name__ == '__main__':
     except Exception as pin_err:
         print(f'Не удалось закрепить шаблоны (возможно, бот не админ в чате): {pin_err}')
 
-    bot.infinity_polling(skip_pending=True, interval=2, timeout=20)
+    # Защищенный цикл поллинга с автоперезапуском при любых сбоях сети
+    while True:
+        try:
+            print('Старт приема сообщений (polling)...')
+            bot.infinity_polling(skip_pending=True, interval=1, timeout=20, long_polling_timeout=20)
+        except Exception as polling_err:
+            print(f'⚠️ Ошибка в поллинге: {polling_err}. Перезапуск через 5 секунд...')
+            time.sleep(5)
