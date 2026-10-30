@@ -1,6 +1,7 @@
 import os
 import time
 import threading
+import re
 from threading import Thread
 from flask import Flask
 import telebot
@@ -90,7 +91,7 @@ TEXTS = {
             'Категория: {cat}\n'
             'Точка: {pvz}\n\n'
             'Опишите детали вашего обращения.\n'
-            f'📌 Можно отправить до {MAX_FILES_LIMIT} файлов (каждый до {MAX_FILE_SIZE_MB} МБ). Бот подождет и отправит всё автоматически.'
+            f'📌 Можно отправить до {MAX_FILES_LIMIT} файлов (каждый до {MAX_FILE_SIZE_MB} МБ). Бот подождет и отправлит всё автоматически.'
         ),
         'welcome_praise': (
             'Вы выбрали: Поблагодарить сотрудника (точка: {pvz}).\n\n'
@@ -262,6 +263,17 @@ def admin_reply(message):
     try:
         replied_id = message.reply_to_message.message_id
         client_id = admin_message_mapping.get(replied_id)
+
+        # 🛡 Страховка: если бот перезагружался, ищем ID клиента прямо в тексте сообщения с помощью регулярного выражения
+        if not client_id and message.reply_to_message.text:
+            match = re.search(r'ID:\s*(\d+)', message.reply_to_message.text)
+            if match:
+                client_id = int(match.group(1))
+
+        if not client_id and message.reply_to_message.caption:
+            match = re.search(r'ID:\s*(\d+)', message.reply_to_message.caption)
+            if match:
+                client_id = int(match.group(1))
 
         if client_id:
             msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
