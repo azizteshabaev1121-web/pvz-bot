@@ -20,15 +20,17 @@ user_action = {}
 user_category = {}
 user_media_buffer = {}  
 user_timers = {}        
+dialogue_timers = {}    
 admin_message_mapping = {}
 active_dialogue = {}    
 
 buffer_lock = threading.Lock()  
 
-MAX_FILES_LIMIT = 10                
-MAX_FILE_SIZE_MB = 20               
+MAX_FILES_LIMIT = 10                    
+MAX_FILE_SIZE_MB = 20                    
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  
-MAX_MAPPING_SIZE = 500              
+MAX_MAPPING_SIZE = 500                    
+DIALOGUE_TIMEOUT = 1800                 # Время жизни активного диалога (30 минут в секундах)
 
 def add_to_mapping(msg_id, client_id):
     with buffer_lock:
@@ -36,6 +38,20 @@ def add_to_mapping(msg_id, client_id):
         if len(admin_message_mapping) > MAX_MAPPING_SIZE:
             oldest_key = next(iter(admin_message_mapping))
             admin_message_mapping.pop(oldest_key, None)
+
+def close_dialogue(chat_id):
+    with buffer_lock:
+        if active_dialogue.get(chat_id):
+            active_dialogue.pop(chat_id, None)
+            if chat_id in dialogue_timers:
+                dialogue_timers.pop(chat_id, None)
+            try:
+                bot.send_message(
+                    chat_id, 
+                    "⏳ Время сеанса связи по этому обращению истекло. Чтобы начать новое обращение, пожалуйста, нажмите /start."
+                )
+            except Exception:
+                pass
 
 PINNED_TEMPLATES_TEXT = (
     "📋 **ШАБЛОНЫ ОТВЕТОВ КЛИЕНТАМ**\n"
@@ -91,7 +107,7 @@ TEXTS = {
             'Категория: {cat}\n'
             'Точка: {pvz}\n\n'
             'Опишите детали вашего обращения.\n'
-            f'📌 Можно отправить до {MAX_FILES_LIMIT} файлов (каждый до {MAX_FILE_SIZE_MB} МБ). Бот подождет и отправлит всё автоматически.'
+            f'📌 Можно отправить до {MAX_FILES_LIMIT} файлов (каждый до {MAX_FILE_SIZE_MB} МБ). Бот подождет и отправит всё автоматически.'
         ),
         'welcome_praise': (
             'Вы выбрали: Поблагодарить сотрудника (точка: {pvz}).\n\n'
@@ -121,7 +137,7 @@ TEXTS = {
             'Minnatdorchilik so‘zlaringizni yoki rasmlarni yuboring.'
         ),
         'success_complaint': '✅ Murojaatingiz BTP rahbariyatiga muvaffaqiyatli yuborildi. Xizmat sifatini yaxshilashga yordam berganingiz uchun rahmat!',
-        'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yetkazildi! Iliq so\'zlaringiz uchun katta rahmat!',
+        'success_praise': '✅ Minnatdorchiligingiz rahbariyatga yetkazildi! Iliq so‘zlaringiz uchun katta rahmat!',
     },
 }
 
@@ -153,337 +169,11 @@ def send_welcome(message):
             if chat_id in user_timers:
                 user_timers[chat_id].cancel()
                 user_timers.pop(chat_id, None)
+            if chat_id in dialogue_timers:
+                dialogue_timers[chat_id].cancel()
+                dialogue_timers.pop(chat_id, None)
 
         current_pvz_key = 'pvz1'
         args = message.text.split()
         if len(args) > 1:
-            param = args[1].lower()
-            if '2' in param or 'urikzor' in param or 'pvz2' in param:
-                current_pvz_key = 'pvz2'
-            elif '3' in param or 'universitet' in param or 'pvz3' in param:
-                current_pvz_key = 'pvz3'
-            elif '4' in param or 'zamin' in param or 'bunyodkor' in param or 'angren' in param or 'pvz4' in param:
-                current_pvz_key = 'pvz4'
-            elif '1' in param or 'dukent' in param or 'pvz1' in param:
-                current_pvz_key = 'pvz1'
-
-        user_pvz_key[chat_id] = current_pvz_key
-
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        btn_ru = types.InlineKeyboardButton('🇷🇺 Русский', callback_data='lang_ru')
-        btn_uz = types.InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data='lang_uz')
-        markup.add(btn_ru, btn_uz)
-
-        bot.send_message(
-            chat_id,
-            'Здравствуйте! Пожалуйста, выберите язык / Tilni tanlang:',
-            reply_markup=markup,
-        )
-    except Exception as e:
-        print(f'Error in send_welcome: {e}')
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('lang_'))
-def set_language(call):
-    try:
-        chat_id = call.message.chat.id
-        lang = call.data.split('_')[1]
-        user_lang[chat_id] = lang
-
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except Exception:
-            pass
-
-        show_action_menu(chat_id, lang)
-    except Exception as e:
-        print(f'Error in set_language: {e}')
-
-def show_action_menu(chat_id, lang):
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn1 = types.InlineKeyboardButton(TEXTS[lang]['btn_complaint'], callback_data='action_complaint')
-    btn2 = types.InlineKeyboardButton(TEXTS[lang]['btn_praise'], callback_data='action_praise')
-    markup.add(btn1, btn2)
-    bot.send_message(chat_id, TEXTS[lang]['choose_action'], reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('action_'))
-def set_action(call):
-    try:
-        chat_id = call.message.chat.id
-        action = call.data.split('_')[1]
-        user_action[chat_id] = action
-
-        lang = user_lang.get(chat_id, 'ru')
-        p_key = user_pvz_key.get(chat_id, 'pvz1')
-        pvz = PVZ_NAMES_RU[p_key] if lang == 'ru' else PVZ_NAMES_UZ[p_key]
-
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except Exception:
-            pass
-
-        if action == 'complaint':
-            markup = types.InlineKeyboardMarkup(row_width=1)
-            for i in range(1, 6):
-                cat_key = f'cat_{i}'
-                markup.add(types.InlineKeyboardButton(TEXTS[lang][cat_key], callback_data=f'category_{i}'))
-            bot.send_message(chat_id, TEXTS[lang]['choose_category'], reply_markup=markup)
-        else:
-            user_category[chat_id] = 'Благодарность' if lang == 'ru' else 'Minnatdorchilik'
-            user_media_buffer[chat_id] = []
-            text = TEXTS[lang]['welcome_praise'].format(pvz=pvz)
-            bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
-    except Exception as e:
-        print(f'Error in set_action: {e}')
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('category_'))
-def set_category(call):
-    try:
-        chat_id = call.message.chat.id
-        cat_index = call.data.split('_')[1]
-        lang = user_lang.get(chat_id, 'ru')
-        p_key = user_pvz_key.get(chat_id, 'pvz1')
-        pvz = PVZ_NAMES_RU[p_key] if lang == 'ru' else PVZ_NAMES_UZ[p_key]
-
-        cat_text = TEXTS[lang][f'cat_{cat_index}']
-        user_category[chat_id] = cat_text
-        user_media_buffer[chat_id] = []
-
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except Exception:
-            pass
-
-        text = TEXTS[lang]['welcome_complaint'].format(cat=cat_text, pvz=pvz)
-        bot.send_message(chat_id, text, reply_markup=types.ReplyKeyboardRemove())
-    except Exception as e:
-        print(f'Error in set_category: {e}')
-
-@bot.message_handler(func=lambda message: str(message.chat.id) == ADMIN_CHAT_ID and message.reply_to_message)
-def admin_reply(message):
-    try:
-        replied_id = message.reply_to_message.message_id
-        client_id = admin_message_mapping.get(replied_id)
-
-        if not client_id and message.reply_to_message.text:
-            match = re.search(r'ID:\s*(\d+)', message.reply_to_message.text)
-            if match:
-                client_id = int(match.group(1))
-
-        if not client_id and message.reply_to_message.caption:
-            match = re.search(r'ID:\s*(\d+)', message.reply_to_message.caption)
-            if match:
-                client_id = int(match.group(1))
-
-        if client_id:
-            msg_sent = bot.send_message(client_id, f'💬 Ответ от руководства:\n\n{message.text}')
-            add_to_mapping(msg_sent.message_id, client_id)
-            
-            def send_to_sheets_async():
-                try:
-                    payload = {
-                        'type': 'admin_reply',
-                        'client': str(client_id),
-                        'text': message.text
-                    }
-                    requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
-                except Exception as sheet_err:
-                    print(f'Google Sheets error on admin reply: {sheet_err}')
-            
-            threading.Thread(target=send_to_sheets_async).start()
-
-            bot.reply_to(message, '✅ Ответ отправлен клиенту и записан в строку таблицы!')
-        else:
-            bot.reply_to(message, '❌ Не удалось найти клиента. Убедитесь, что отвечаете на сообщение нового обращения.')
-    except Exception as e:
-        bot.reply_to(message, f'❌ Ошибка при отправке: {e}')
-
-def send_buffered_appeal(chat_id):
-    try:
-        with buffer_lock:
-            if chat_id not in user_media_buffer or not user_media_buffer[chat_id]:
-                return
-
-            buffer = user_media_buffer[chat_id]
-            lang = user_lang.get(chat_id, 'ru')
-            p_key = user_pvz_key.get(chat_id, 'pvz1')
-            pvz = PVZ_NAMES_RU[p_key] if lang == 'ru' else PVZ_NAMES_UZ[p_key]
-            action = user_action.get(chat_id, 'complaint')
-            category = user_category.get(chat_id, 'Не указана')
-
-            user_media_buffer.pop(chat_id, None)
-            if chat_id in user_timers:
-                user_timers[chat_id].cancel()
-                user_timers.pop(chat_id, None)
-
-        if action == 'complaint':
-            success_text = TEXTS[lang]['success_complaint']
-            title = f'📩 Обращение к руководству ПВЗ ({category})!' if lang == 'ru' else f'📩 BTP rahbariyatiga murojaat ({category})!'
-            action_name = 'Обращение ПВЗ' if lang == 'ru' else 'BTP Murojaat'
-        else:
-            success_text = TEXTS[lang]['success_praise']
-            title = '⭐️ Новая благодарность сотруднику!' if lang == 'ru' else '⭐️ Xodimga yangi minnatdorchilik!'
-            action_name = 'Благодарность' if lang == 'ru' else 'Minnatdorchilik'
-
-        first_msg = buffer[0]
-        client_info = f"@{first_msg.from_user.username} (ID: {chat_id})" if first_msg.from_user.username else f"ID: {chat_id}"
-
-        all_texts = []
-        has_media = False
-        for msg in buffer:
-            txt = msg.text or msg.caption
-            if txt:
-                all_texts.append(txt)
-            if msg.content_type in ['photo', 'video', 'document', 'audio']:
-                has_media = True
-
-        combined_text = " \n".join(all_texts) if all_texts else ("[Медиафайлы без текста]" if has_media else "Обращение без текста")
-
-        def send_to_sheets_async():
-            try:
-                payload = {
-                    'pvz': pvz,
-                    'action': action_name,
-                    'category': category,
-                    'client': client_info,
-                    'text': combined_text
-                }
-                requests.post(GOOGLE_SHEET_WEB_APP_URL, json=payload, timeout=5)
-            except Exception as sheet_err:
-                print(f'Google Sheets error: {sheet_err}')
-        
-        threading.Thread(target=send_to_sheets_async).start()
-
-        label_pvz = 'ПВЗ' if lang == 'ru' else 'BTP'
-        admin_text = (
-            f'{title}\n'
-            f'📍 {label_pvz}: {pvz}\n'
-            f'👤 От: {client_info}\n'
-            f'💬 Описание: {combined_text}'
-        )
-
-        msg1 = bot.send_message(ADMIN_CHAT_ID, admin_text)
-        add_to_mapping(msg1.message_id, chat_id)
-
-        for msg in buffer:
-            if msg.content_type in ['photo', 'video', 'document', 'audio']:
-                try:
-                    msg_f = bot.forward_message(ADMIN_CHAT_ID, chat_id, msg.message_id)
-                    add_to_mapping(msg_f.message_id, chat_id)
-                except Exception:
-                    pass
-
-        bot.send_message(chat_id, success_text)
-
-        with buffer_lock:
-            user_lang.pop(chat_id, None)
-            user_pvz_key.pop(chat_id, None)
-            user_action.pop(chat_id, None)
-            user_category.pop(chat_id, None)
-            active_dialogue[chat_id] = True
-
-    except Exception as e:
-        print(f'Error in send_buffered_appeal: {e}')
-
-@bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'audio'])
-def handle_complaint(message):
-    try:
-        chat_id = message.chat.id
-        username = message.from_user.username
-
-        with buffer_lock:
-            is_active = active_dialogue.get(chat_id, False)
-
-        if is_active:
-            client_info = f"@{username} (ID: {chat_id})" if username else f"ID: {chat_id}"
-            if message.content_type == 'text':
-                admin_text = f"💬 Ответ от клиента ({client_info}):\n\n{message.text}"
-                msg_forwarded = bot.send_message(ADMIN_CHAT_ID, admin_text)
-                add_to_mapping(msg_forwarded.message_id, chat_id)
-            else:
-                caption = f"💬 Медиа-ответ от клиента ({client_info})" + (f": {message.caption}" if message.caption else "")
-                msg_forwarded = bot.copy_message(ADMIN_CHAT_ID, chat_id, message.message_id, caption=caption)
-                add_to_mapping(msg_forwarded.message_id, chat_id)
-            
-            bot.reply_to(message, "✅ Ваше сообщение отправлено руководству.")
-            return
-
-        with buffer_lock:
-            has_lang = chat_id in user_lang
-            has_pvz = chat_id in user_pvz_key
-            has_action = chat_id in user_action
-            has_category = chat_id in user_category
-            lang = user_lang.get(chat_id, 'ru')
-
-        if not (has_lang and has_pvz and has_action and has_category):
-            bot.send_message(chat_id, 'Пожалуйста, нажмите /start для начала работы с ботом.')
-            return
-
-        file_size = 0
-        if message.video:
-            file_size = message.video.file_size or 0
-        elif message.document:
-            file_size = message.document.file_size or 0
-        elif message.audio:
-            file_size = message.audio.file_size or 0
-        elif message.photo:
-            file_size = message.photo[-1].file_size or 0
-
-        if file_size > MAX_FILE_SIZE_BYTES:
-            warning_text = (
-                f'⚠️ Этот файл слишком большой! Максимальный размер одного файла — {MAX_FILE_SIZE_MB} МБ.'
-                if lang == 'ru'
-                else f'⚠️ Bu fayl juda katta! Har bir fayl uchun maksimal hajm — {MAX_FILE_SIZE_MB} MB.'
-            )
-            bot.send_message(chat_id, warning_text)
-            return
-
-        reached_limit = False
-        with buffer_lock:
-            if chat_id not in user_media_buffer:
-                user_media_buffer[chat_id] = []
-
-            user_media_buffer[chat_id].append(message)
-
-            if len(user_media_buffer[chat_id]) >= MAX_FILES_LIMIT:
-                reached_limit = True
-                if chat_id in user_timers:
-                    user_timers[chat_id].cancel()
-                    user_timers.pop(chat_id, None)
-            else:
-                if chat_id in user_timers:
-                    user_timers[chat_id].cancel()
-
-                timer = threading.Timer(8.0, send_buffered_appeal, args=[chat_id])
-                user_timers[chat_id] = timer
-                timer.start()
-
-        if reached_limit:
-            threading.Thread(target=send_buffered_appeal, args=(chat_id,)).start()
-            bot.send_message(chat_id, f'⚠️ Достигнут лимит в {MAX_FILES_LIMIT} файлов. Ваше обращение отправлено автоматически.')
-
-    except Exception as e:
-        print(f'Error in handle_complaint: {e}')
-
-if __name__ == '__main__':
-    keep_alive()
-    print('Бот запущен в облаке...')
-    time.sleep(5)
-    try:
-        bot.remove_webhook()
-    except Exception:
-        pass
-
-    try:
-        pinned_msg = bot.send_message(ADMIN_CHAT_ID, PINNED_TEMPLATES_TEXT, parse_mode="Markdown")
-        bot.pin_chat_message(ADMIN_CHAT_ID, pinned_msg.message_id)
-        print('Шаблоны успешно отправлены и закреплены в чате администратора!')
-    except Exception as pin_err:
-        print(f'Не удалось закрепить шаблоны (возможно, бот не админ в чате): {pin_err}')
-
-    while True:
-        try:
-            print('Старт приема сообщений (polling)...')
-            bot.infinity_polling(skip_pending=True, interval=1, timeout=20, long_polling_timeout=20)
-        except Exception as polling_err:
-            print(f'⚠️ Ошибка в поллинге: {polling_err}. Перезапуск через 5 секунд...')
-            time.sleep(5)
+            param = args[1].
